@@ -374,12 +374,24 @@ body {
 
 /* Print Styles */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 5mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   .no-print {
     display: none !important;
   }
   
   body {
     background-color: white;
+    margin: 0;
+    padding: 0;
   }
   
   .print-only {
@@ -387,9 +399,9 @@ body {
   }
   
   .voucher-print {
-    width: 105mm;
-    height: 148mm;
-    padding: 15mm;
+    width: 100%;
+    height: 287mm; /* Full A4 height minus margins */
+    padding: 0;
     margin: 0;
     page-break-after: always;
   }

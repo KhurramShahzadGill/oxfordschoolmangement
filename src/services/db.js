@@ -58,6 +58,9 @@ const seedData = () => {
   if (!localStorage.getItem('ogs_fees')) {
     setStorage('ogs_fees', []);
   }
+  if (!localStorage.getItem('ogs_custom_charges')) {
+    setStorage('ogs_custom_charges', []);
+  }
 };
 seedData();
 
@@ -200,21 +203,22 @@ export const apiParents = {
   create: async (data) => {
     await delay(100);
     const parents = getStorage('ogs_parents');
-    // Use father_cnic as the parent ID
-    const newParent = { id: data.father_cnic, ...data };
+    const newParent = { id: uuidv4(), ...data };
     parents.push(newParent);
     setStorage('ogs_parents', parents);
     return newParent;
   },
   createOrGet: async (data) => {
-    // Check if parent with this father_cnic already exists
     await delay(100);
     const parents = getStorage('ogs_parents');
-    const existing = parents.find(p => p.father_cnic === data.father_cnic);
-    if (existing) {
-      return { parent: existing, isNew: false };
+    // Check if parent with this father_cnic already exists (only if CNIC provided)
+    if (data.father_cnic) {
+      const existing = parents.find(p => p.father_cnic === data.father_cnic);
+      if (existing) {
+        return { parent: existing, isNew: false };
+      }
     }
-    const newParent = { id: data.father_cnic, ...data };
+    const newParent = { id: uuidv4(), ...data };
     parents.push(newParent);
     setStorage('ogs_parents', parents);
     return { parent: newParent, isNew: true };
@@ -261,11 +265,22 @@ export const apiStudents = {
   create: async (data) => {
     await delay(100);
     const students = getStorage('ogs_students');
-    // Check for duplicate student ID
-    if (students.find(s => s.id === data.id)) {
-      throw new Error(`Student ID "${data.id}" already exists.`);
+    
+    // Auto-generate numeric ID
+    let nextId = 1;
+    if (students.length > 0) {
+      const numericIds = students
+        .map(s => parseInt(s.id))
+        .filter(id => !isNaN(id));
+      if (numericIds.length > 0) {
+        nextId = Math.max(...numericIds) + 1;
+      } else {
+        // Fallback if existing IDs aren't numeric
+        nextId = students.length + 1;
+      }
     }
-    const newStudent = { status: 'Active', ...data };
+
+    const newStudent = { ...data, id: nextId.toString(), status: 'Active' };
     students.push(newStudent);
     setStorage('ogs_students', students);
     return newStudent;
@@ -363,6 +378,45 @@ export const apiFees = {
     let fees = getStorage('ogs_fees');
     fees = fees.filter(f => f.id !== id);
     setStorage('ogs_fees', fees);
+    return true;
+  }
+};
+
+// ========== CUSTOM CHARGES API ==========
+export const apiCustomCharges = {
+  getAll: async () => {
+    await delay(100);
+    return getStorage('ogs_custom_charges');
+  },
+  getByStudentId: async (studentId) => {
+    await delay(100);
+    const charges = getStorage('ogs_custom_charges');
+    return charges.filter(c => c.student_id === studentId);
+  },
+  create: async (data) => {
+    await delay(100);
+    const charges = getStorage('ogs_custom_charges');
+    const newCharge = { id: uuidv4(), date_created: new Date().toISOString().split('T')[0], ...data };
+    charges.push(newCharge);
+    setStorage('ogs_custom_charges', charges);
+    return newCharge;
+  },
+  update: async (id, data) => {
+    await delay(100);
+    const charges = getStorage('ogs_custom_charges');
+    const index = charges.findIndex(c => c.id === id);
+    if (index > -1) {
+      charges[index] = { ...charges[index], ...data };
+      setStorage('ogs_custom_charges', charges);
+      return charges[index];
+    }
+    throw new Error('Custom charge not found');
+  },
+  delete: async (id) => {
+    await delay(100);
+    let charges = getStorage('ogs_custom_charges');
+    charges = charges.filter(c => c.id !== id);
+    setStorage('ogs_custom_charges', charges);
     return true;
   }
 };

@@ -3,13 +3,13 @@ import { apiClasses, apiSections } from '../services/db';
 import { formatCnic, formatMobile } from '../utils/formatters';
 import { differenceInYears, parseISO } from 'date-fns';
 
-export default function StudentForm({ initial, parents, onSubmit, onCancel, isEdit }) {
+export default function StudentForm({ initial, parents, onSubmit, onCancel, isEdit, nextId }) {
   const [classes, setClasses] = useState([]);
   const [sections, setSections] = useState([]);
   const [form, setForm] = useState({
     id: '', roll_no: '', name: '', dob: '', gender: 'Male',
     admission_date: new Date().toISOString().split('T')[0],
-    leaving_date: '', medical_info: '', monthly_fee: '', fee_start_month: new Date().toISOString().split('T')[0].slice(0,7), status: 'Active',
+    leaving_date: '', medical_info: '', address: '', monthly_fee: '', fee_start_month: new Date().toISOString().split('T')[0].slice(0,7), status: 'Active',
     class_id: '', section_id: '', picture: '',
     father_name: '', father_cnic: '', father_occupation: '', father_contact: '',
     mother_name: '', mother_cnic: '', mother_contact: '',
@@ -52,8 +52,8 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
         <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Student Information</h3>
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="form-group">
-            <label className="form-label">Student ID *</label>
-            <input className="form-input" style={inputStyle} required disabled={isEdit} value={form.id} onChange={e => set('id', e.target.value)} placeholder="Enter Student ID" />
+            <label className="form-label">Student ID <span className="text-xs text-secondary-color">(Auto Generated)</span></label>
+            <input className="form-input" style={{ ...inputStyle, background: '#f8fafc', fontWeight: 'bold', color: 'var(--primary)' }} disabled value={isEdit ? form.id : nextId} />
           </div>
           <div className="form-group">
             <label className="form-label">Roll Number *</label>
@@ -118,6 +118,10 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
             <label className="form-label">Medical Information</label>
             <input className="form-input" style={inputStyle} value={form.medical_info} onChange={e => set('medical_info', e.target.value)} />
           </div>
+          <div className="form-group" style={{ gridColumn: 'span 3' }}>
+            <label className="form-label">Student Address</label>
+            <textarea className="form-input" style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} value={form.address} onChange={e => set('address', e.target.value)} placeholder="House #, Street, Area, City" />
+          </div>
           <div className="form-group">
             <label className="form-label">Student Picture *</label>
             <input type="file" accept="image/*" onChange={handlePicture} style={{ fontSize: '0.85rem' }} required={!isEdit && !form.picture} />
@@ -133,8 +137,8 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
             <input className="form-input" style={inputStyle} required value={form.father_name} onChange={e => set('father_name', e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Father's CNIC * <span className="text-xs text-secondary-color">(00000-0000000-0)</span></label>
-            <input className="form-input" style={inputStyle} required value={form.father_cnic} onChange={e => set('father_cnic', formatCnic(e.target.value))} placeholder="00000-0000000-0" maxLength={15} />
+            <label className="form-label">Father's CNIC <span className="text-xs text-secondary-color">(00000-0000000-0)</span></label>
+            <input className="form-input" style={inputStyle} value={form.father_cnic} onChange={e => set('father_cnic', formatCnic(e.target.value))} placeholder="00000-0000000-0" maxLength={15} />
           </div>
           <div className="form-group">
             <label className="form-label">Father's Occupation</label>

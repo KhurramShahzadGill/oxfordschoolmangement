@@ -22,11 +22,8 @@ export default function Layout() {
     <div className="app-container">
       {/* Sidebar */}
       <aside className="sidebar no-print">
-        <div className="sidebar-header">
-          <div style={{ width: 32, height: 32, backgroundColor: 'var(--primary)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>
-            OG
-          </div>
-          <h1>Oxford Grammar</h1>
+        <div className="sidebar-header" style={{ justifyContent: 'center' }}>
+          <img src="/logo.png" alt="Oxford Grammar" style={{ height: '50px', objectFit: 'contain', maxWidth: '100%' }} />
         </div>
         
         <nav className="nav-links">

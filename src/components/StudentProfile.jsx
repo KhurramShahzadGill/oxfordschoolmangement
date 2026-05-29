@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { apiStudents, apiClasses, apiSections, apiStudentHistory, apiParents } from '../services/db';
 import { differenceInYears, parseISO } from 'date-fns';
-import { QRCodeSVG } from 'qrcode.react';
-import { ArrowUpRight, History, X, Printer, IdCard } from 'lucide-react';
+import { ArrowUpRight, History, X, IdCard } from 'lucide-react';
+import StudentCard from './StudentCard';
 
 export default function StudentProfile({ studentId, onClose, onUpdate }) {
   const [student, setStudent] = useState(null);
@@ -14,7 +14,15 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
   const [promoClass, setPromoClass] = useState('');
   const [promoSection, setPromoSection] = useState('');
   const [printCard, setPrintCard] = useState(false);
+  const [printProfile, setPrintProfile] = useState(false);
+  
+  // Section visibility toggles
+  const [showBasicInfo, setShowBasicInfo] = useState(true);
+  const [showParentInfo, setShowParentInfo] = useState(true);
+  const [showHistoryInfo, setShowHistoryInfo] = useState(true);
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
 
+  // ... (existing load and effects)
   const load = async () => {
     const [s, cList, sList, h] = await Promise.all([
       apiStudents.getById(studentId),
@@ -37,7 +45,6 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
   if (!student) return null;
 
   const cls = classes.find(c => c.id === student.class_id);
-  const sec = sections.filter(s => s.class_id === student.class_id);
   const curSec = sections.find(s => s.id === student.section_id);
   const age = student.dob ? differenceInYears(new Date(), parseISO(student.dob)) : '-';
   const promoSections = sections.filter(s => s.class_id === promoClass);
@@ -54,6 +61,12 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
     setPrintCard(true);
     setTimeout(() => window.print(), 150);
     setTimeout(() => setPrintCard(false), 500);
+  };
+
+  const handlePrintProfile = () => {
+    setPrintProfile(true);
+    setTimeout(() => window.print(), 150);
+    setTimeout(() => setPrintProfile(false), 500);
   };
 
   const getClassName = (id) => classes.find(c => c.id === id)?.class_name || '-';
@@ -87,12 +100,15 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
 
           {/* Info Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--bg-primary)', padding: 16, borderRadius: 12, marginBottom: 20, fontSize: '0.85rem' }}>
+            <div><strong>Date of Birth:</strong> {student.dob || '-'}</div>
             <div><strong>Age:</strong> {age} years</div>
             <div><strong>Gender:</strong> {student.gender}</div>
-            <div><strong>Admission:</strong> {student.admission_date}</div>
+            <div><strong>Admission Date:</strong> {student.admission_date || '-'}</div>
             <div><strong>Monthly Fee:</strong> Rs. {student.monthly_fee}</div>
+            <div><strong>Status:</strong> {student.status}</div>
             {student.leaving_date && <div><strong>Leaving Date:</strong> {student.leaving_date}</div>}
-            {student.medical_info && <div style={{ gridColumn: 'span 2' }}><strong>Medical:</strong> {student.medical_info}</div>}
+            {student.medical_info && <div><strong>Medical Info:</strong> {student.medical_info}</div>}
+            {student.address && <div style={{ gridColumn: 'span 2' }}><strong>Address:</strong> {student.address}</div>}
           </div>
 
           {/* Parent Info */}
@@ -153,7 +169,33 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
           )}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <button className="btn btn-secondary" style={{ padding: '8px 14px', fontSize: '0.85rem' }} onClick={() => setShowPrintOptions(!showPrintOptions)}>
+                Print Options
+              </button>
+              {showPrintOptions && (
+                <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: 8, background: 'white', padding: 16, borderRadius: 12, boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border-color)', width: 250, zIndex: 10 }}>
+                  <h4 className="font-semibold text-sm mb-3">Select Print Information</h4>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: '0.85rem' }}>
+                    <input type="checkbox" checked={showBasicInfo} onChange={e => setShowBasicInfo(e.target.checked)} /> Basic Information
+                  </label>
+                  {parent && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: '0.85rem' }}>
+                      <input type="checkbox" checked={showParentInfo} onChange={e => setShowParentInfo(e.target.checked)} /> Parent Information
+                    </label>
+                  )}
+                  {history.length > 0 && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: '0.85rem' }}>
+                      <input type="checkbox" checked={showHistoryInfo} onChange={e => setShowHistoryInfo(e.target.checked)} /> Promotion History
+                    </label>
+                  )}
+                  <button className="btn btn-primary" style={{ width: '100%', padding: '6px 0', fontSize: '0.85rem' }} onClick={() => { setShowPrintOptions(false); handlePrintProfile(); }}>
+                    Print Profile
+                  </button>
+                </div>
+              )}
+            </div>
             <button className="btn btn-secondary" style={{ padding: '8px 14px', fontSize: '0.85rem' }} onClick={handlePrint}><IdCard size={14} /> Print ID Card</button>
           </div>
         </div>
@@ -161,26 +203,133 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
 
       {/* Print Only: Student ID Card */}
       {printCard && (
-        <div className="print-only" style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
-          <div style={{ width: '54mm', height: '86mm', border: '2px solid #1e293b', borderRadius: 12, overflow: 'hidden', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', background: 'white' }}>
-            <div style={{ background: '#4318FF', color: 'white', padding: '10px 8px', textAlign: 'center' }}>
-              <div style={{ fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' }}>Oxford Grammar School</div>
+        <div className="print-only" style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+          <StudentCard 
+            student={student} 
+            parent={parent} 
+            className={cls?.class_name} 
+            sectionName={curSec?.section_name} 
+          />
+        </div>
+      )}
+
+      {/* Print Only: Student Profile */}
+      {printProfile && (
+        <div className="print-only" style={{ padding: '40px', fontFamily: 'Arial, sans-serif', color: '#333' }}>
+          {/* Header */}
+          <div style={{ textAlign: 'center', borderBottom: '2px solid #4318FF', paddingBottom: '20px', marginBottom: '30px' }}>
+            <h1 style={{ fontSize: '28px', color: '#4318FF', margin: 0 }}>Student Profile Report</h1>
+            <p style={{ color: '#666', marginTop: '5px' }}>Oxford Grammar School</p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '30px' }}>
+             {student.picture && (
+                <img src={student.picture} alt={student.name} style={{ width: '100px', height: '100px', borderRadius: '12px', objectFit: 'cover', border: '2px solid #4318FF' }} />
+             )}
+             <div>
+                <h2 style={{ fontSize: '24px', margin: '0 0 5px 0' }}>{student.name}</h2>
+                <div style={{ fontSize: '16px', color: '#555' }}>
+                  <strong>ID:</strong> {student.id} &nbsp;|&nbsp; <strong>Roll No:</strong> {student.roll_no} &nbsp;|&nbsp; <strong>Class:</strong> {cls?.class_name || '-'} - {curSec?.section_name || '-'}
+                </div>
+             </div>
+          </div>
+
+          {showBasicInfo && (
+            <div style={{ marginBottom: '30px' }}>
+              <h3 style={{ fontSize: '18px', color: '#4318FF', borderBottom: '1px solid #ccc', paddingBottom: '8px', marginBottom: '15px' }}>Basic Information</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '8px 0', width: '25%', fontWeight: 'bold' }}>Date of Birth:</td>
+                    <td style={{ padding: '8px 0', width: '25%' }}>{student.dob || '-'}</td>
+                    <td style={{ padding: '8px 0', width: '25%', fontWeight: 'bold' }}>Age:</td>
+                    <td style={{ padding: '8px 0', width: '25%' }}>{age} years</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Gender:</td>
+                    <td style={{ padding: '8px 0' }}>{student.gender}</td>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Status:</td>
+                    <td style={{ padding: '8px 0' }}>{student.status}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Admission Date:</td>
+                    <td style={{ padding: '8px 0' }}>{student.admission_date || '-'}</td>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Monthly Fee:</td>
+                    <td style={{ padding: '8px 0' }}>Rs. {student.monthly_fee}</td>
+                  </tr>
+                  {(student.leaving_date || student.medical_info) && (
+                    <tr>
+                      <td style={{ padding: '8px 0', fontWeight: 'bold' }}>{student.leaving_date ? 'Leaving Date:' : ''}</td>
+                      <td style={{ padding: '8px 0' }}>{student.leaving_date || ''}</td>
+                      <td style={{ padding: '8px 0', fontWeight: 'bold' }}>{student.medical_info ? 'Medical Info:' : ''}</td>
+                      <td style={{ padding: '8px 0' }}>{student.medical_info || ''}</td>
+                    </tr>
+                  )}
+                  {student.address && (
+                    <tr>
+                      <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Address:</td>
+                      <td colSpan="3" style={{ padding: '8px 0' }}>{student.address}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '14px 8px 8px' }}>
-              <div style={{ width: 56, height: 56, borderRadius: '50%', border: '2px solid #4318FF', overflow: 'hidden', marginBottom: 10 }}>
-                {student.picture ? <img src={student.picture} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', background: '#e2e8f0' }} />}
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 'bold', textAlign: 'center' }}>{student.name}</div>
-              <div style={{ fontSize: 9, color: '#4318FF', fontWeight: 600 }}>STUDENT</div>
+          )}
+
+          {showParentInfo && parent && (
+            <div style={{ marginBottom: '30px' }}>
+              <h3 style={{ fontSize: '18px', color: '#4318FF', borderBottom: '1px solid #ccc', paddingBottom: '8px', marginBottom: '15px' }}>Parent Information</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '8px 0', width: '25%', fontWeight: 'bold' }}>Father's Name:</td>
+                    <td style={{ padding: '8px 0', width: '25%' }}>{parent.father_name}</td>
+                    <td style={{ padding: '8px 0', width: '25%', fontWeight: 'bold' }}>Father's CNIC:</td>
+                    <td style={{ padding: '8px 0', width: '25%' }}>{parent.father_cnic}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Occupation:</td>
+                    <td style={{ padding: '8px 0' }}>{parent.father_occupation || '-'}</td>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Contact:</td>
+                    <td style={{ padding: '8px 0' }}>{parent.father_contact || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Mother's Name:</td>
+                    <td style={{ padding: '8px 0' }}>{parent.mother_name || '-'}</td>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Mother's Contact:</td>
+                    <td style={{ padding: '8px 0' }}>{parent.mother_contact || '-'}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div style={{ padding: '0 12px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', fontSize: 9 }}>
-              <div style={{ marginBottom: 4 }}><strong>ID:</strong> {student.id}</div>
-              <div style={{ marginBottom: 4 }}><strong>Class:</strong> {cls?.class_name} - {curSec?.section_name}</div>
-              <div><strong>Parent:</strong> {parent?.father_name || '-'}</div>
+          )}
+
+          {showHistoryInfo && history.length > 0 && (
+            <div style={{ marginBottom: '30px' }}>
+              <h3 style={{ fontSize: '18px', color: '#4318FF', borderBottom: '1px solid #ccc', paddingBottom: '8px', marginBottom: '15px' }}>Promotion History</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f4f4f4' }}>
+                    <th style={{ padding: '10px', borderBottom: '1px solid #ddd' }}>Date</th>
+                    <th style={{ padding: '10px', borderBottom: '1px solid #ddd' }}>From Class</th>
+                    <th style={{ padding: '10px', borderBottom: '1px solid #ddd' }}>To Class</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map(h => (
+                    <tr key={h.id}>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{h.date}</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{getClassName(h.from_class_id)} ({getSectionName(h.from_section_id)})</td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>{getClassName(h.to_class_id)} ({getSectionName(h.to_section_id)})</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div style={{ background: '#f8fafc', padding: 10, display: 'flex', justifyContent: 'center', borderTop: '1px solid #e2e8f0' }}>
-              <QRCodeSVG value={`STUDENT:${student.id}`} size={44} level="M" />
-            </div>
+          )}
+          
+          <div style={{ marginTop: '50px', textAlign: 'center', fontSize: '12px', color: '#888' }}>
+            Report generated on {new Date().toLocaleDateString()}
           </div>
         </div>
       )}
