@@ -6,7 +6,7 @@
  *  - Classes: { id, class_name }
  *  - Sections: { id, class_id, section_name }
  *  - Parents: { id (= father_cnic), father_name, father_cnic, father_occupation, father_contact, mother_name, mother_cnic, mother_contact }
- *  - Students: { id (manual), roll_no (manual), name, dob, gender, admission_date, leaving_date, medical_info, monthly_fee, fee_start_month, picture (base64), status, parent_id, class_id, section_id }
+ *  - Students: { id (manual), roll_no (manual), name, dob, gender, admission_date, leaving_date, medical_info, monthly_fee, fee_start_month, admission_fee, security_fee, paper_fund, stationery_fee, other_fee, picture (base64), status, parent_id, class_id, section_id }
  *  - StudentHistory: { id, student_id, from_class_id, from_section_id, to_class_id, to_section_id, date, type }
  *  - Fees: { id, student_id, month, fine, paper_fund, other_charges, paid_date, status, amount_paid }
  */

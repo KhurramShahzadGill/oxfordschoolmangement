@@ -12,7 +12,7 @@ const STUDENT_COL_GROUPS = [
     label: 'Basic Info',
     columns: [
       { key: 'id',      label: 'Student ID' },
-      { key: 'roll_no', label: 'Roll No' },
+      { key: 'roll_no', label: 'Admission No' },
       { key: 'name',    label: 'Student Name' },
       { key: 'status',  label: 'Status' },
       { key: 'gender',  label: 'Gender' },
@@ -219,6 +219,8 @@ export default function Students() {
       id: form.id, roll_no: form.roll_no, name: form.name, dob: form.dob,
       gender: form.gender, admission_date: form.admission_date, leaving_date: form.leaving_date,
       medical_info: form.medical_info, monthly_fee: form.monthly_fee, fee_start_month: form.fee_start_month,
+      admission_fee: form.admission_fee, security_fee: form.security_fee, paper_fund: form.paper_fund,
+      stationery_fee: form.stationery_fee, other_fee: form.other_fee,
       address: form.address,
       picture: form.picture, status: form.status, parent_id: parent.id, class_id: form.class_id, section_id: form.section_id,
     };
@@ -308,7 +310,7 @@ export default function Students() {
       try { if (s.dob) age = differenceInYears(new Date(), parseISO(s.dob)); } catch {}
       const row = {};
       if (printCols.id)               row['Student ID']         = s.id || '';
-      if (printCols.roll_no)          row['Roll No']            = s.roll_no || '';
+      if (printCols.roll_no)          row['Admission No']       = s.roll_no || '';
       if (printCols.name)             row['Student Name']       = s.name || '';
       if (printCols.status)           row['Status']             = s.status || '';
       if (printCols.gender)           row['Gender']             = s.gender || '';
@@ -392,7 +394,7 @@ export default function Students() {
             <div style={{ position: 'relative' }}>
               <SearchIcon size={18} style={{ position: 'absolute', left: 14, top: 10, color: 'var(--text-secondary)' }} />
               <input className="form-input" style={{ paddingLeft: 42, width: '100%', padding: '10px 14px 10px 42px' }}
-                placeholder="Search by Student ID, Roll No, or Name..."
+                placeholder="Search by Student ID, Admission No, or Name..."
                 value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
             <div style={{ position: 'relative' }}>
@@ -457,7 +459,7 @@ export default function Students() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>ID</th><th>Roll No</th><th>Name</th><th>Class</th><th>Section</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th>
+                    <th>ID</th><th>Admission No</th><th>Name</th><th>Class</th><th>Section</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -546,7 +548,7 @@ export default function Students() {
                 <div key={s.id} style={{ borderBottom: '1px solid #000', paddingBottom: 10, pageBreakInside: 'avoid' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', fontSize: 11, color: '#000000' }}>
                     <div style={{ width: '100%', fontSize: 13, fontWeight: 900, marginBottom: 4, color: '#000000' }}>
-                      #{idx + 1} - {s.name} (Roll: {s.roll_no || '-'})
+                      #{idx + 1} - {s.name} (Admission No: {s.roll_no || '-'})
                     </div>
                     {printCols.id && <div style={{ minWidth: 120 }}><strong>ID:</strong> {s.id}</div>}
                     {printCols.status && <div style={{ minWidth: 120 }}><strong>Status:</strong> {s.status}</div>}

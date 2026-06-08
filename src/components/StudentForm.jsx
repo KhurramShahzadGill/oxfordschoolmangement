@@ -10,6 +10,7 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
     id: '', roll_no: '', name: '', dob: '', gender: 'Male',
     admission_date: new Date().toISOString().split('T')[0],
     leaving_date: '', medical_info: '', address: '', monthly_fee: '', fee_start_month: new Date().toISOString().split('T')[0].slice(0,7), status: 'Active',
+    admission_fee: '', security_fee: '', paper_fund: '', stationery_fee: '', other_fee: '',
     class_id: '', section_id: '', picture: '',
     father_name: '', father_cnic: '', father_occupation: '', father_contact: '',
     mother_name: '', mother_cnic: '', mother_contact: '',
@@ -56,51 +57,51 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
             <input className="form-input" style={{ ...inputStyle, background: '#f8fafc', fontWeight: 'bold', color: 'var(--primary)' }} disabled value={isEdit ? form.id : nextId} />
           </div>
           <div className="form-group">
-            <label className="form-label">Roll Number *</label>
-            <input className="form-input" style={inputStyle} required value={form.roll_no} onChange={e => set('roll_no', e.target.value)} />
+            <label className="form-label">Admission Number</label>
+            <input className="form-input" style={inputStyle} value={form.roll_no} onChange={e => set('roll_no', e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Full Name *</label>
-            <input className="form-input" style={inputStyle} required value={form.name} onChange={e => set('name', e.target.value)} />
+            <label className="form-label">Full Name</label>
+            <input className="form-input" style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Date of Birth *</label>
+            <label className="form-label">Date of Birth</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input type="date" className="form-input" style={inputStyle} required value={form.dob} onChange={e => set('dob', e.target.value)} />
+              <input type="date" className="form-input" style={inputStyle} value={form.dob} onChange={e => set('dob', e.target.value)} />
               <input className="form-input" style={{ ...inputStyle, width: 72, background: '#f1f5f9', textAlign: 'center' }} readOnly value={age !== '' ? `${age} yr` : ''} placeholder="Age" />
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Gender *</label>
+            <label className="form-label">Gender</label>
             <select className="form-select" style={inputStyle} value={form.gender} onChange={e => set('gender', e.target.value)}>
               <option>Male</option><option>Female</option><option>Other</option>
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Admission Date *</label>
-            <input type="date" className="form-input" style={inputStyle} required value={form.admission_date} onChange={e => set('admission_date', e.target.value)} />
+            <label className="form-label">Admission Date</label>
+            <input type="date" className="form-input" style={inputStyle} value={form.admission_date} onChange={e => set('admission_date', e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Class *</label>
-            <select className="form-select" style={inputStyle} required value={form.class_id} onChange={e => { set('class_id', e.target.value); set('section_id', ''); }}>
+            <label className="form-label">Class</label>
+            <select className="form-select" style={inputStyle} value={form.class_id} onChange={e => { set('class_id', e.target.value); set('section_id', ''); }}>
               <option value="">-- Select --</option>
               {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Section *</label>
-            <select className="form-select" style={inputStyle} required value={form.section_id} onChange={e => set('section_id', e.target.value)}>
+            <label className="form-label">Section</label>
+            <select className="form-select" style={inputStyle} value={form.section_id} onChange={e => set('section_id', e.target.value)}>
               <option value="">-- Select --</option>
               {classSections.map(s => <option key={s.id} value={s.id}>{s.section_name}</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Monthly Fee (Rs.) *</label>
-            <input type="number" className="form-input" style={inputStyle} required value={form.monthly_fee} onChange={e => set('monthly_fee', e.target.value)} />
+            <label className="form-label">Monthly Fee (Rs.)</label>
+            <input type="number" className="form-input" style={inputStyle} value={form.monthly_fee} onChange={e => set('monthly_fee', e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Fee Starts From *</label>
-            <input type="month" className="form-input" style={inputStyle} required value={form.fee_start_month} onChange={e => set('fee_start_month', e.target.value)} />
+            <label className="form-label">Fee Starts From</label>
+            <input type="month" className="form-input" style={inputStyle} value={form.fee_start_month} onChange={e => set('fee_start_month', e.target.value)} />
           </div>
           <div className="form-group">
             <label className="form-label">Status</label>
@@ -123,9 +124,34 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
             <textarea className="form-input" style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }} value={form.address} onChange={e => set('address', e.target.value)} placeholder="House #, Street, Area, City" />
           </div>
           <div className="form-group">
-            <label className="form-label">Student Picture *</label>
-            <input type="file" accept="image/*" onChange={handlePicture} style={{ fontSize: '0.85rem' }} required={!isEdit && !form.picture} />
+            <label className="form-label">Student Picture</label>
+            <input type="file" accept="image/*" onChange={handlePicture} style={{ fontSize: '0.85rem' }} />
             {form.picture && <img src={form.picture} alt="preview" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', marginTop: 8 }} />}
+          </div>
+        </div>
+
+        {/* Admission / One-Time Charges Section */}
+        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Admission / One-Time Charges</h3>
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="form-group">
+            <label className="form-label">Admission Fee (Rs.)</label>
+            <input type="number" className="form-input" style={inputStyle} value={form.admission_fee} onChange={e => set('admission_fee', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Security Fee (Rs.)</label>
+            <input type="number" className="form-input" style={inputStyle} value={form.security_fee} onChange={e => set('security_fee', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Paper Fund (Rs.)</label>
+            <input type="number" className="form-input" style={inputStyle} value={form.paper_fund} onChange={e => set('paper_fund', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Stationery Fee (Rs.)</label>
+            <input type="number" className="form-input" style={inputStyle} value={form.stationery_fee} onChange={e => set('stationery_fee', e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Others (Rs.)</label>
+            <input type="number" className="form-input" style={inputStyle} value={form.other_fee} onChange={e => set('other_fee', e.target.value)} />
           </div>
         </div>
 
@@ -133,8 +159,8 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
         <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parent / Guardian Information</h3>
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="form-group">
-            <label className="form-label">Father's Name *</label>
-            <input className="form-input" style={inputStyle} required value={form.father_name} onChange={e => set('father_name', e.target.value)} />
+            <label className="form-label">Father's Name</label>
+            <input className="form-input" style={inputStyle} value={form.father_name} onChange={e => set('father_name', e.target.value)} />
           </div>
           <div className="form-group">
             <label className="form-label">Father's CNIC <span className="text-xs text-secondary-color">(00000-0000000-0)</span></label>

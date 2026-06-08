@@ -126,7 +126,7 @@ export default function Parents() {
                                 <div key={s.id} style={{ display: 'flex', gap: 16, padding: '6px 0', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
                                   <span className="font-medium">{s.name}</span>
                                   <span className="text-secondary-color">ID: {s.id}</span>
-                                  <span className="text-secondary-color">Roll: {s.roll_no}</span>
+                                  <span className="text-secondary-color">Admission No: {s.roll_no}</span>
                                   <span className={`badge ${s.status === 'Active' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span>
                                 </div>
                               ))}

@@ -237,7 +237,7 @@ export default function StudentCard({ student, parent, className, sectionName })
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '4px', marginTop: '5px' }}>
             <h2 style={{ ...studentNameStyle, margin: 0 }}>{student.name}</h2>
             <div style={{ fontSize: '13px', color: '#385387', fontWeight: 'bold', paddingBottom: '2px', marginRight: '5px' }}>
-              ID: {student.id} | Roll: {student.roll_no || '-'}
+              ID: {student.id} | Admission No: {student.roll_no || '-'}
             </div>
           </div>
           

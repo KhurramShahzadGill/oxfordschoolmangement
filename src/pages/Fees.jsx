@@ -8,13 +8,26 @@ import * as XLSX from 'xlsx';
 const fmtM = (m) => { try { return format(parseISO(m + '-01'), 'MMM yyyy'); } catch { return m; } };
 const nextMonth = (m) => { const [y, mo] = m.split('-').map(Number); return mo === 12 ? `${y+1}-01` : `${y}-${String(mo+1).padStart(2,'0')}`; };
 
+/* One-time admission charges captured in the student profile. Each tracks a `<key>_paid` amount. */
+const ADMISSION_HEADS = [
+  { key: 'admission_fee',  label: 'Admission Fee' },
+  { key: 'security_fee',   label: 'Security Fee' },
+  { key: 'paper_fund',     label: 'Paper Fund' },
+  { key: 'stationery_fee', label: 'Stationery Fee' },
+  { key: 'other_fee',      label: 'Others' },
+];
+const getAdmissionDues = (student) => ADMISSION_HEADS
+  .map(h => ({ ...h, amount: Number(student[h.key] || 0), paid: Number(student[h.key + '_paid'] || 0) }))
+  .map(h => ({ ...h, balance: h.amount - h.paid }))
+  .filter(h => h.balance > 0);
+
 /* ───────── Column Groups for Fee Export Modal ───────── */
 const FEE_COL_GROUPS = [
   {
     label: 'Basic Info',
     columns: [
       { key: 'id',      label: 'Student ID' },
-      { key: 'roll_no', label: 'Roll No' },
+      { key: 'roll_no', label: 'Admission No' },
       { key: 'name',    label: 'Student Name' },
       { key: 'status',  label: 'Fee Status' },
     ],
@@ -161,6 +174,8 @@ export default function Fees() {
   const [payStudent, setPayStudent] = useState(null);
   // CollectionItems: [{ month, type: 'Monthly Fee' | 'Fine' | 'Paper Fund' | 'Other', payable, paying }]
   const [collectionItems, setCollectionItems] = useState([]);
+  const [fineDesc, setFineDesc] = useState('');
+  const [fineAmount, setFineAmount] = useState('');
   const [printData, setPrintData] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [historyStudent, setHistoryStudent] = useState(null);
@@ -223,6 +238,7 @@ export default function Fees() {
       const bal = Number(c.amount) - Number(c.amount_paid || 0);
       if (bal > 0) amount += bal;
     });
+    getAdmissionDues(student).forEach(h => { amount += h.balance; });
     return amount;
   };
 
@@ -247,6 +263,7 @@ export default function Fees() {
       if (bal <= 0) { paid++; }
       else { unpaid++; unpaidAmt += bal; }
     });
+    getAdmissionDues(student).forEach(h => { unpaid++; unpaidAmt += h.balance; });
     return { paid, unpaid, paidAmt, unpaidAmt };
   };
 
@@ -324,30 +341,20 @@ export default function Fees() {
       const existing = getFee(s.id, m);
       const paidAlready = Number(existing?.amount_paid || 0);
       const monthlyDue = Number(s.monthly_fee || 0);
-      
-      // Calculate remaining monthly fee
+
+      // Only the monthly fee is auto-listed. Fines are added manually via the "Save Fine" button.
       const remainingMonthly = Math.max(0, monthlyDue - paidAlready);
       if (remainingMonthly > 0 || (!existing && m === curMonth)) {
         items.push({ month: m, type: 'Monthly Fee', payable: remainingMonthly || monthlyDue, paying: remainingMonthly || monthlyDue, isMarkedPaid: false });
       }
-      
-      // For other charges, we check if they were partially paid
-      // Since we don't track which part was paid, we assume monthly fee is paid first
-      const overPaidMonthly = Math.max(0, paidAlready - monthlyDue);
-      
-      const fine = Number(existing?.fine || 0);
-      const paper = Number(existing?.paper_fund || 0);
-      const other = Number(existing?.other_charges || 0);
-      
-      const finePayable = Math.max(0, fine - overPaidMonthly);
-      const paperPayable = Math.max(0, paper - Math.max(0, overPaidMonthly - fine));
-      const otherPayable = Math.max(0, other - Math.max(0, overPaidMonthly - fine - paper));
-
-      if (finePayable > 0) items.push({ month: m, type: 'Fine', payable: finePayable, paying: finePayable, isMarkedPaid: false });
-      if (paperPayable > 0) items.push({ month: m, type: 'Paper Fund', payable: paperPayable, paying: paperPayable, isMarkedPaid: false });
-      if (otherPayable > 0) items.push({ month: m, type: 'Other Charges', payable: otherPayable, paying: otherPayable, isMarkedPaid: false });
     });
 
+    // One-time admission charges (from profile) appear as dues until fully paid
+    getAdmissionDues(s).forEach(h => {
+      items.push({ admissionKey: h.key, month: 'N/A', type: h.label, payable: h.balance, paying: h.balance, isMarkedPaid: false, isAdmission: true });
+    });
+
+    // Outstanding fines (stored as custom charges) appear as dues
     const myCharges = customCharges.filter(c => c.student_id === s.id);
     myCharges.forEach(c => {
       const bal = Number(c.amount) - Number(c.amount_paid || 0);
@@ -358,6 +365,20 @@ export default function Fees() {
 
     setPayStudent(s);
     setCollectionItems(items);
+  };
+
+  const addFine = async () => {
+    if (!payStudent) return;
+    const amount = Number(fineAmount);
+    if (!amount || amount <= 0) { alert('Fine ki amount likhein'); return; }
+    const title = fineDesc.trim() ? `Fine (${fineDesc.trim()})` : 'Fine';
+    const created = await apiCustomCharges.create({
+      student_id: payStudent.id, title, amount,
+      amount_paid: 0, status: 'Unpaid', paid_date: null,
+    });
+    await loadData();
+    setCollectionItems(prev => [...prev, { charge_id: created.id, month: 'N/A', type: title, payable: amount, paying: amount, isMarkedPaid: true, isCustom: true }]);
+    setFineDesc(''); setFineAmount('');
   };
 
   const handlePay = async (e) => {
@@ -428,6 +449,19 @@ export default function Fees() {
         else await apiFees.create(data);
       }
     }
+
+    // One-time admission charges → accumulate paid amount on the student record
+    const admissionItems = paidItems.filter(i => i.isAdmission);
+    if (admissionItems.length > 0) {
+      const updates = {};
+      admissionItems.forEach(i => {
+        const key = i.admissionKey + '_paid';
+        const prev = updates[key] !== undefined ? updates[key] : Number(payStudent[key] || 0);
+        updates[key] = prev + Number(i.paying);
+      });
+      await apiStudents.update(payStudent.id, updates);
+    }
+
     loadData();
   };
 
@@ -466,6 +500,14 @@ export default function Fees() {
       }
     });
 
+    // One-time admission charges not being paid now → show as dues
+    getAdmissionDues(student).forEach(h => {
+      const isBeingPaid = items.some(i => i.isAdmission && i.admissionKey === h.key);
+      if (!isBeingPaid) {
+        allUnpaid.push({ month: h.label, balance: h.balance, isCustom: true });
+      }
+    });
+
     const feeData = {
       month: primaryMonth,
       paid_date: format(new Date(), 'yyyy-MM-dd'),
@@ -498,7 +540,7 @@ export default function Fees() {
       const arrTotal = getArrearsAmount(s);
       const row = {};
       if (printCols.id)               row['Student ID']            = s.id || '';
-      if (printCols.roll_no)          row['Roll No']               = s.roll_no || '';
+      if (printCols.roll_no)          row['Admission No']          = s.roll_no || '';
       if (printCols.name)             row['Student Name']          = s.name || '';
       if (printCols.status)           row['Fee Status']            = ps.unpaid === 0 ? 'All Paid' : 'Unpaid';
       if (printCols.class)            row['Class']                 = c?.class_name || '';
@@ -582,7 +624,7 @@ export default function Fees() {
             </select>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <input className="form-input" style={{ flex: 1, minWidth: 200, ...inp }} placeholder="Student ID, Roll, Name..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
+            <input className="form-input" style={{ flex: 1, minWidth: 200, ...inp }} placeholder="Student ID, Admission No, Name..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
             <input className="form-input" style={{ flex: 1, minWidth: 200, ...inp }} placeholder="Parent CNIC, Name..." value={parentSearch} onChange={e => setParentSearch(e.target.value)} />
           </div>
         </div>
@@ -626,7 +668,7 @@ export default function Fees() {
               </div>
               {isExp && (
                 <table className="data-table" style={{ marginBottom: 0 }}>
-                  <thead><tr><th>ID</th><th>Roll</th><th>Name</th><th>Fee</th><th>Arrears</th><th>Status</th><th style={{ textAlign: 'right' }}>Action</th></tr></thead>
+                  <thead><tr><th>ID</th><th>Admission No</th><th>Name</th><th>Fee</th><th>Arrears</th><th>Status</th><th style={{ textAlign: 'right' }}>Action</th></tr></thead>
                   <tbody>
                     {g.students.map(s => {
                       const ps = getPeriodStatus(s);
@@ -677,7 +719,7 @@ export default function Fees() {
       {payStudent && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', padding: '40px 20px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 650, position: 'relative', animation: 'fadeIn 0.3s ease' }}>
-            <button onClick={() => setPayStudent(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            <button onClick={() => { setPayStudent(null); setFineDesc(''); setFineAmount(''); }} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
             <h2 className="text-xl font-bold mb-4">Fee Collection & Voucher Generator</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, background: 'var(--bg-primary)', padding: 16, borderRadius: 12, marginBottom: 20 }}>
@@ -686,7 +728,7 @@ export default function Fees() {
                 <div>
                   <div className="font-bold text-lg">{payStudent.name}</div>
                   <div className="text-xs text-secondary-color">Father: {getParent(payStudent.parent_id)?.father_name || '-'}</div>
-                  <div className="text-xs text-secondary-color">ID: {payStudent.id} | Roll: {payStudent.roll_no}</div>
+                  <div className="text-xs text-secondary-color">ID: {payStudent.id} | Admission No: {payStudent.roll_no}</div>
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -695,17 +737,11 @@ export default function Fees() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, marginBottom: 15, background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px dashed #cbd5e1' }}>
-              <input type="text" id="customChargeName" placeholder="Charge Name (e.g. Stationery)" className="form-input" style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }} />
-              <input type="number" id="customChargeAmount" placeholder="Amount" className="form-input" style={{ width: 120, padding: '8px 12px', fontSize: '0.85rem' }} />
-              <button type="button" className="btn btn-primary" onClick={() => {
-                const name = document.getElementById('customChargeName').value;
-                const amount = Number(document.getElementById('customChargeAmount').value);
-                if (!name || !amount) return;
-                setCollectionItems([...collectionItems, { charge_id: 'new', month: 'N/A', type: name, payable: amount, paying: amount, isMarkedPaid: true, isCustom: true }]);
-                document.getElementById('customChargeName').value = '';
-                document.getElementById('customChargeAmount').value = '';
-              }}>+ Add Custom Charge</button>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 15, background: '#fff7ed', padding: 12, borderRadius: 8, border: '1px dashed #fdba74', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#9a3412', whiteSpace: 'nowrap' }}>Add Fine:</span>
+              <input type="text" value={fineDesc} onChange={e => setFineDesc(e.target.value)} placeholder="Fine Description (e.g. Late fee, Broken chair)" className="form-input" style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }} />
+              <input type="number" value={fineAmount} onChange={e => setFineAmount(e.target.value)} placeholder="Amount" className="form-input" style={{ width: 110, padding: '8px 12px', fontSize: '0.85rem' }} />
+              <button type="button" className="btn btn-primary" onClick={addFine} style={{ whiteSpace: 'nowrap' }}>+ Save Fine</button>
             </div>
 
             <div style={{ maxHeight: 350, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 20 }}>
@@ -760,9 +796,9 @@ export default function Fees() {
               <button type="button" className="btn btn-primary" style={{ padding: '12px 24px' }} onClick={(e) => { 
                 const paidItems = collectionItems.filter(i => i.isMarkedPaid);
                 if (paidItems.length === 0) { alert('Please mark at least one item as Paid'); return; }
-                handlePay(e); 
-                handlePrint(payStudent, paidItems); 
-                setPayStudent(null);
+                handlePay(e);
+                handlePrint(payStudent, paidItems);
+                setPayStudent(null); setFineDesc(''); setFineAmount('');
               }}>
                 <Printer size={18} /> Print & Save Voucher
               </button>
@@ -812,7 +848,7 @@ export default function Fees() {
                   <div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: 'white', marginBottom: 3 }}>{historyStudent.name}</div>
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                      {[['ID', historyStudent.id], ['Roll', historyStudent.roll_no], ['Class', `${getClass(historyStudent.class_id)?.class_name} – ${getSection(historyStudent.section_id)?.section_name}`], ['Monthly Fee', `Rs. ${Number(historyStudent.monthly_fee||0).toLocaleString()}`]].map(([k,v]) => (
+                      {[['ID', historyStudent.id], ['Admission No', historyStudent.roll_no], ['Class', `${getClass(historyStudent.class_id)?.class_name} – ${getSection(historyStudent.section_id)?.section_name}`], ['Monthly Fee', `Rs. ${Number(historyStudent.monthly_fee||0).toLocaleString()}`]].map(([k,v]) => (
                         <span key={k} style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', background: 'rgba(255,255,255,0.08)', borderRadius: 6, padding: '2px 8px' }}><strong style={{ color: 'rgba(255,255,255,0.9)' }}>{k}:</strong> {v}</span>
                       ))}
                     </div>
@@ -947,7 +983,7 @@ export default function Fees() {
                 <div key={s.id} style={{ borderBottom: '1px solid #000', paddingBottom: 10, pageBreakInside: 'avoid' }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', fontSize: 11, color: '#000000' }}>
                     <div style={{ width: '100%', fontSize: 13, fontWeight: 900, marginBottom: 4, color: '#000000' }}>
-                      #{idx + 1} - {s.name} (Roll: {s.roll_no || '-'})
+                      #{idx + 1} - {s.name} (Admission No: {s.roll_no || '-'})
                     </div>
                     {printCols.id && <div style={{ minWidth: 120 }}><strong>ID:</strong> {s.id}</div>}
                     {printCols.status && <div style={{ minWidth: 120 }}><strong>Status:</strong> {isPaid ? 'Paid' : 'Unpaid'}</div>}
@@ -1002,7 +1038,7 @@ export default function Fees() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, fontSize: 12 }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16 }}>{historyStudent.name}</div>
-                <div><strong>ID / Roll No:</strong> {historyStudent.id} / {historyStudent.roll_no}</div>
+                <div><strong>ID / Admission No:</strong> {historyStudent.id} / {historyStudent.roll_no}</div>
                 <div><strong>Class:</strong> {getClass(historyStudent.class_id)?.class_name} – {getSection(historyStudent.section_id)?.section_name}</div>
                 <div><strong>Monthly Fee:</strong> Rs. {Number(historyStudent.monthly_fee||0).toLocaleString()}</div>
               </div>

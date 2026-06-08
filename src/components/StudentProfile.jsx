@@ -92,7 +92,7 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
             </div>
             <div style={{ flex: 1 }}>
               <h2 className="text-xl font-bold">{student.name}</h2>
-              <p className="text-sm text-secondary-color">ID: {student.id} &bull; Roll No: {student.roll_no}</p>
+              <p className="text-sm text-secondary-color">ID: {student.id} &bull; Admission No: {student.roll_no}</p>
               <p className="text-sm">{cls?.class_name || '-'} - Section {curSec?.section_name || '-'}</p>
             </div>
             <span className={`badge ${student.status === 'Active' ? 'badge-success' : 'badge-danger'}`}>{student.status}</span>
@@ -229,7 +229,7 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
              <div>
                 <h2 style={{ fontSize: '24px', margin: '0 0 5px 0' }}>{student.name}</h2>
                 <div style={{ fontSize: '16px', color: '#555' }}>
-                  <strong>ID:</strong> {student.id} &nbsp;|&nbsp; <strong>Roll No:</strong> {student.roll_no} &nbsp;|&nbsp; <strong>Class:</strong> {cls?.class_name || '-'} - {curSec?.section_name || '-'}
+                  <strong>ID:</strong> {student.id} &nbsp;|&nbsp; <strong>Admission No:</strong> {student.roll_no} &nbsp;|&nbsp; <strong>Class:</strong> {cls?.class_name || '-'} - {curSec?.section_name || '-'}
                 </div>
              </div>
           </div>
