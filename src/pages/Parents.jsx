@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiParents, apiStudents } from '../services/db';
-import { Edit2, Search as SearchIcon, Users } from 'lucide-react';
+import { Edit2, Trash2, Search as SearchIcon, Users } from 'lucide-react';
 import { formatCnic, formatMobile } from '../utils/formatters';
 
 export default function Parents() {
@@ -44,6 +44,24 @@ export default function Parents() {
   const saveEdit = async () => {
     await apiParents.update(editingId, editForm);
     setEditingId(null);
+    loadParents(searchQuery);
+  };
+
+  // Delete a parent along with all of their linked student records
+  const handleDeleteParent = async (p) => {
+    const children = await apiStudents.getByParentId(p.id);
+    const who = p.father_name || p.father_cnic || 'this parent';
+    const message = children.length > 0
+      ? `This will permanently delete parent "${who}" AND all ${children.length} linked student record(s). This action cannot be undone. Continue?`
+      : `Delete parent "${who}"? This action cannot be undone.`;
+    if (!window.confirm(message)) return;
+
+    for (const s of children) {
+      await apiStudents.delete(s.id);
+    }
+    await apiParents.delete(p.id);
+
+    if (expandedParent === p.id) setExpandedParent(null);
     loadParents(searchQuery);
   };
 
@@ -113,7 +131,8 @@ export default function Parents() {
                             <button onClick={() => toggleExpand(p.id)} className="badge badge-primary" style={{ border: 'none', cursor: 'pointer', marginRight: 10 }}>
                               <Users size={12} style={{ marginRight: 4 }}/> Children
                             </button>
-                            <button onClick={() => startEdit(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><Edit2 size={16} /></button>
+                            <button onClick={() => startEdit(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', marginRight: 8 }}><Edit2 size={16} /></button>
+                            <button onClick={() => handleDeleteParent(p)} title="Delete parent and all linked students" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}><Trash2 size={16} /></button>
                           </td>
                         </tr>
                         {expandedParent === p.id && (

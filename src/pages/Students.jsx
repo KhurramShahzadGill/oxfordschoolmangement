@@ -84,7 +84,7 @@ function ExportModal({ isOpen, onClose, title, columnGroups, selectedCols, onCol
               <Printer size={18} style={{ opacity: 0.85 }} /> {title}
             </div>
             <div style={{ fontSize: '0.73rem', color: 'rgba(255,255,255,0.65)', marginTop: 4 }}>
-              PDF print aur Excel export ke liye columns chunein
+              Select columns for PDF print and Excel export
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 10, padding: '7px', cursor: 'pointer', color: 'white', display: 'flex', transition: 'background 0.2s' }}
@@ -137,7 +137,7 @@ function ExportModal({ isOpen, onClose, title, columnGroups, selectedCols, onCol
           {/* Count pill */}
           <div style={{ marginTop: 14, padding: '9px 16px', background: '#eff6ff', borderRadius: 10, border: '1px solid #bfdbfe', fontSize: '0.82rem', color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>✓</span>
-            <span>{selectedCount} column{selectedCount !== 1 ? 's' : ''} export ke liye selected hain</span>
+            <span>{selectedCount} column{selectedCount !== 1 ? 's' : ''} selected for export</span>
           </div>
         </div>
 
@@ -251,10 +251,26 @@ export default function Students() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this student?')) {
-      await apiStudents.delete(id);
-      loadData();
+    if (!window.confirm('Are you sure you want to delete this student?')) return;
+
+    const student = students.find(s => s.id === id);
+    const parentId = student?.parent_id;
+
+    await apiStudents.delete(id);
+
+    // If this was the parent's last enrolled child, offer to remove the orphaned parent too
+    if (parentId) {
+      const siblings = students.filter(s => s.parent_id === parentId && s.id !== id);
+      if (siblings.length === 0) {
+        const parent = parents.find(p => p.id === parentId);
+        const pname = parent?.father_name ? `"${parent.father_name}"` : 'this parent';
+        if (window.confirm(`This parent (${pname}) has no other enrolled children.\n\nDo you also want to delete the parent record?\n\nOK = delete parent too | Cancel = keep parent record`)) {
+          await apiParents.delete(parentId);
+        }
+      }
     }
+
+    loadData();
   };
 
   // Filtering logic
@@ -301,7 +317,7 @@ export default function Students() {
 
   // Excel Export — respects printCols
   const handleExportExcel = () => {
-    if (filtered.length === 0) { alert('Export karne ke liye koi student nahi mila.'); return; }
+    if (filtered.length === 0) { alert('No students found to export.'); return; }
     const rows = filtered.map(s => {
       const p = parents.find(pr => pr.id === s.parent_id);
       const c = classes.find(cl => cl.id === s.class_id);
@@ -333,7 +349,7 @@ export default function Students() {
       if (printCols.fee_start_month)  row['Fee Start Month']    = s.fee_start_month || '';
       return row;
     });
-    if (Object.keys(rows[0] || {}).length === 0) { alert('Kam az kam ek column zaroor chunein.'); return; }
+    if (Object.keys(rows[0] || {}).length === 0) { alert('Please select at least one column.'); return; }
     const ws = XLSX.utils.json_to_sheet(rows);
     const colWidths = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 16) }));
     ws['!cols'] = colWidths;
@@ -361,7 +377,7 @@ export default function Students() {
             {/* Single Export button opens the modal */}
             <button
               onClick={() => setShowExportModal(true)}
-              title="PDF print ya Excel export ke liye columns chunein"
+              title="Select columns for PDF print or Excel export"
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#4318FF,#3311DB)', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem', boxShadow: '0 2px 8px rgba(67,24,255,0.3)' }}
             >
               <Printer size={15} />

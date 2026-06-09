@@ -233,6 +233,13 @@ export const apiParents = {
       return parents[index];
     }
     throw new Error('Parent not found');
+  },
+  delete: async (id) => {
+    await delay(100);
+    let parents = getStorage('ogs_parents');
+    parents = parents.filter(p => p.id !== id);
+    setStorage('ogs_parents', parents);
+    return true;
   }
 };
 

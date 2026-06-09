@@ -84,7 +84,7 @@ function ExportModal({ isOpen, onClose, title, columnGroups, selectedCols, onCol
               <Printer size={18} style={{ opacity: 0.85 }} /> {title}
             </div>
             <div style={{ fontSize: '0.73rem', color: 'rgba(255,255,255,0.65)', marginTop: 4 }}>
-              PDF print aur Excel export ke liye columns chunein
+              Select columns for PDF print and Excel export
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 10, padding: '7px', cursor: 'pointer', color: 'white', display: 'flex' }}>
@@ -370,7 +370,7 @@ export default function Fees() {
   const addFine = async () => {
     if (!payStudent) return;
     const amount = Number(fineAmount);
-    if (!amount || amount <= 0) { alert('Fine ki amount likhein'); return; }
+    if (!amount || amount <= 0) { alert('Please enter the fine amount.'); return; }
     const title = fineDesc.trim() ? `Fine (${fineDesc.trim()})` : 'Fine';
     const created = await apiCustomCharges.create({
       student_id: payStudent.id, title, amount,
@@ -530,7 +530,7 @@ export default function Fees() {
 
   // Excel Export for Fee Module — respects printCols
   const handleFeeExportExcel = () => {
-    if (filtered.length === 0) { alert('Export karne ke liye koi student nahi mila.'); return; }
+    if (filtered.length === 0) { alert('No students found to export.'); return; }
     const rows = [];
     filtered.forEach(s => {
       const p = parents.find(pr => pr.id === s.parent_id);
@@ -558,7 +558,7 @@ export default function Fees() {
       if (printCols.address)          row['Address']               = s?.address || '';
       if (Object.keys(row).length > 0) rows.push(row);
     });
-    if (rows.length === 0 || Object.keys(rows[0] || {}).length === 0) { alert('Kam az kam ek column zaroor chunein.'); return; }
+    if (rows.length === 0 || Object.keys(rows[0] || {}).length === 0) { alert('Please select at least one column.'); return; }
     const ws = XLSX.utils.json_to_sheet(rows);
     const colWidths = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 16) }));
     ws['!cols'] = colWidths;
@@ -596,7 +596,7 @@ export default function Fees() {
             {/* Single button opens Export Modal */}
             <button
               onClick={() => setShowExportModal(true)}
-              title="PDF print ya Excel export ke liye columns chunein"
+              title="Select columns for PDF print or Excel export"
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#4318FF,#3311DB)', color: 'white', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem', boxShadow: '0 2px 8px rgba(67,24,255,0.3)' }}
             >
               <Printer size={15} />
