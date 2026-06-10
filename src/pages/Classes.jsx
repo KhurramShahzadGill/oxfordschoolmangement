@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiClasses, apiSections } from '../services/db';
+import { apiClasses, apiSections, apiStudents } from '../services/db';
 import { Plus, Edit2, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function Classes() {
@@ -54,6 +54,13 @@ export default function Classes() {
   };
 
   const handleDeleteClass = async (id) => {
+    // Block deletion while students are still enrolled, otherwise they become orphaned
+    const students = await apiStudents.getAll();
+    const enrolled = students.filter(s => s.class_id === id);
+    if (enrolled.length > 0) {
+      alert(`Cannot delete this class: ${enrolled.length} student(s) are enrolled in it.\n\nPlease move or delete those students first.`);
+      return;
+    }
     if (window.confirm('Are you sure? This will also delete all sections under this class.')) {
       await apiClasses.delete(id);
       loadData();
@@ -81,6 +88,12 @@ export default function Classes() {
   };
 
   const handleDeleteSection = async (id) => {
+    const students = await apiStudents.getAll();
+    const enrolled = students.filter(s => s.section_id === id);
+    if (enrolled.length > 0) {
+      alert(`Cannot delete this section: ${enrolled.length} student(s) are enrolled in it.\n\nPlease move or delete those students first.`);
+      return;
+    }
     if (window.confirm('Delete this section?')) {
       await apiSections.delete(id);
       loadData();

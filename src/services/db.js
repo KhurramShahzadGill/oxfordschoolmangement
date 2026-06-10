@@ -8,7 +8,7 @@
  *  - Parents: { id (= father_cnic), father_name, father_cnic, father_occupation, father_contact, mother_name, mother_cnic, mother_contact }
  *  - Students: { id (manual), roll_no (manual), name, dob, gender, admission_date, leaving_date, medical_info, monthly_fee, fee_start_month, admission_fee, security_fee, paper_fund, stationery_fee, other_fee, picture (base64), status, parent_id, class_id, section_id }
  *  - StudentHistory: { id, student_id, from_class_id, from_section_id, to_class_id, to_section_id, date, type }
- *  - Fees: { id, student_id, month, fine, paper_fund, other_charges, paid_date, status, amount_paid }
+ *  - Fees: { id, student_id, month, monthly_fee (snapshot locked at payment time), fine, paper_fund, other_charges, paid_date, status, amount_paid }
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -63,6 +63,65 @@ const seedData = () => {
   }
 };
 seedData();
+
+// Remove fee / charge / history records that point to students which no longer exist.
+// Protects against orphaned data (e.g. from older builds that didn't cascade on delete).
+const cleanupOrphans = () => {
+  const ids = new Set(getStorage('ogs_students').map(s => s.id));
+  ['ogs_fees', 'ogs_custom_charges', 'ogs_student_history'].forEach(key => {
+    const rows = getStorage(key);
+    const kept = rows.filter(r => ids.has(r.student_id));
+    if (kept.length !== rows.length) setStorage(key, kept);
+  });
+};
+cleanupOrphans();
+
+// One-time charges (admission, security, paper fund, etc.) are unified into the
+// charges ledger so they collect, print and appear in history like any other charge.
+export const ADMISSION_HEADS = [
+  { key: 'admission_fee',  label: 'Admission Fee' },
+  { key: 'security_fee',   label: 'Security Fee' },
+  { key: 'paper_fund',     label: 'Paper Fund' },
+  { key: 'stationery_fee', label: 'Stationery Fee' },
+  { key: 'other_fee',      label: 'Other Charges' },
+];
+
+// Migrate older students whose one-time charges lived on the student record
+// (admission_fee, *_paid) into proper charge records — run once.
+const migrateAdmissionCharges = () => {
+  if (localStorage.getItem('ogs_migrated_admission_v1')) return;
+  const students = getStorage('ogs_students');
+  const charges = getStorage('ogs_custom_charges');
+  let changed = false;
+  students.forEach(s => {
+    ADMISSION_HEADS.forEach(({ key, label }) => {
+      const amount = Number(s[key] || 0);
+      if (amount <= 0) return;
+      const exists = charges.some(c => c.student_id === s.id && c.title === label && c.is_admission);
+      if (exists) return;
+      const paid = Number(s[key + '_paid'] || 0);
+      charges.push({
+        id: uuidv4(), student_id: s.id, title: label, is_admission: true,
+        amount, amount_paid: paid,
+        status: paid >= amount ? 'Paid' : (paid > 0 ? 'Partial' : 'Unpaid'),
+        date_created: s.admission_date || new Date().toISOString().split('T')[0],
+        paid_date: paid > 0 ? (s.admission_date || null) : null,
+      });
+      changed = true;
+    });
+  });
+  if (changed) setStorage('ogs_custom_charges', charges);
+  localStorage.setItem('ogs_migrated_admission_v1', '1');
+};
+migrateAdmissionCharges();
+
+// Highest student id ever issued — kept so deleted ids are never reused.
+export const peekNextStudentId = () => {
+  const students = getStorage('ogs_students');
+  const maxExisting = students.reduce((mx, s) => Math.max(mx, parseInt(s.id) || 0), 0);
+  const lastUsed = parseInt(localStorage.getItem('ogs_last_student_id') || '0') || 0;
+  return Math.max(maxExisting, lastUsed) + 1;
+};
 
 // ========== Fuzzy Name Search Utility ==========
 // Handles common Urdu-to-English transliteration variations
@@ -272,22 +331,15 @@ export const apiStudents = {
   create: async (data) => {
     await delay(100);
     const students = getStorage('ogs_students');
-    
-    // Auto-generate numeric ID
-    let nextId = 1;
-    if (students.length > 0) {
-      const numericIds = students
-        .map(s => parseInt(s.id))
-        .filter(id => !isNaN(id));
-      if (numericIds.length > 0) {
-        nextId = Math.max(...numericIds) + 1;
-      } else {
-        // Fallback if existing IDs aren't numeric
-        nextId = students.length + 1;
-      }
-    }
 
-    const newStudent = { ...data, id: nextId.toString(), status: 'Active' };
+    // Monotonic ID — never reuses an id from a deleted student (prevents
+    // a new student inheriting a previous student's fee history).
+    const maxExisting = students.reduce((mx, s) => Math.max(mx, parseInt(s.id) || 0), 0);
+    const lastUsed = parseInt(localStorage.getItem('ogs_last_student_id') || '0') || 0;
+    const nextId = Math.max(maxExisting, lastUsed) + 1;
+    localStorage.setItem('ogs_last_student_id', String(nextId));
+
+    const newStudent = { ...data, id: nextId.toString(), status: data.status || 'Active' };
     students.push(newStudent);
     setStorage('ogs_students', students);
     return newStudent;
@@ -305,9 +357,11 @@ export const apiStudents = {
   },
   delete: async (id) => {
     await delay(100);
-    let students = getStorage('ogs_students');
-    students = students.filter(s => s.id !== id);
-    setStorage('ogs_students', students);
+    setStorage('ogs_students', getStorage('ogs_students').filter(s => s.id !== id));
+    // Cascade: a deleted student must not leave behind fees, charges or history
+    setStorage('ogs_fees', getStorage('ogs_fees').filter(f => f.student_id !== id));
+    setStorage('ogs_custom_charges', getStorage('ogs_custom_charges').filter(c => c.student_id !== id));
+    setStorage('ogs_student_history', getStorage('ogs_student_history').filter(h => h.student_id !== id));
     return true;
   },
   promote: async (studentId, toClassId, toSectionId) => {
@@ -387,6 +441,28 @@ export const apiFees = {
     setStorage('ogs_fees', fees);
     return true;
   }
+};
+
+// ========== SCHOOL SETTINGS ==========
+// Stored synchronously so print components (voucher, ID card) can read without async loading.
+const SETTINGS_KEY = 'ogs_settings';
+export const defaultSettings = {
+  school_name: 'Oxford Grammar School',
+  tagline: 'Excellence in Education',
+  address: 'Chak No. 202/RB, Gatti Faisalabad',
+  phone: '0321-6088202',
+  logo: '', // base64 data URL; empty falls back to /logo.png
+};
+export const getSettings = () => {
+  try {
+    return { ...defaultSettings, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+  } catch {
+    return { ...defaultSettings };
+  }
+};
+export const saveSettings = (data) => {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...getSettings(), ...data }));
+  return getSettings();
 };
 
 // ========== CUSTOM CHARGES API ==========

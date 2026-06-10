@@ -1,15 +1,8 @@
 import React from 'react';
 import { format, parseISO } from 'date-fns';
+import { getSettings } from '../services/db';
 
 const fmtM = (m) => { try { return format(parseISO(m + '-01'), 'MMM yyyy'); } catch { return m; } };
-
-/* ── School details — edit here to change header info ───────────────── */
-const SCHOOL = {
-  name: 'OXFORD GRAMMAR SCHOOL',
-  tagline: 'Excellence in Education',
-  address: 'Chak No. 202/RB, Gatti Faisalabad',
-  phone: '0321-6088202',
-};
 
 /* Convert a number to words using the South-Asian (Lakh / Crore) system */
 function numberToWords(value) {
@@ -39,11 +32,12 @@ function numberToWords(value) {
 const C = {
   border: '1px solid #0f172a',
   ink: '#0f172a',
-  muted: '#475569',
+  muted: '#334155',
   light: '#f1f5f9',
 };
 
 function VoucherTemplate({ student, fee, arrears, parent, className, sectionName, breakdown, copyLabel }) {
+  const SCHOOL = getSettings();
   const receivedTotal = Number(fee?.amount_paid || 0);
 
   const currentItems = breakdown || [];
@@ -56,7 +50,8 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
   const balance = grandTotalPayable - receivedTotal;
 
   const issueDate = fee?.paid_date ? format(parseISO(fee.paid_date), 'dd MMM yyyy') : format(new Date(), 'dd MMM yyyy');
-  const challanNo = `OGS/${student.id || '—'}/${format(new Date(), 'yyMMdd')}`;
+  const initials = (SCHOOL.school_name || 'SCH').split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 4);
+  const challanNo = `${initials}/${student.id || '—'}/${format(new Date(), 'yyMMdd')}`;
   const period = fee?.month ? fmtM(fee.month) : '—';
 
   const cell = { border: C.border, padding: '3px 7px', fontSize: '10px', verticalAlign: 'middle' };
@@ -86,9 +81,9 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1.5px solid ' + C.ink, paddingBottom: '6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="/logo.png" alt="Logo" style={{ height: '40px', objectFit: 'contain' }} />
+          <img src={SCHOOL.logo || '/logo.png'} alt="Logo" style={{ height: '40px', objectFit: 'contain' }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 900, letterSpacing: '-0.02em', color: C.ink }}>{SCHOOL.name}</h1>
+            <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 900, letterSpacing: '-0.02em', color: C.ink, textTransform: 'uppercase' }}>{SCHOOL.school_name}</h1>
             <p style={{ margin: 0, fontSize: '8px', color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{SCHOOL.tagline}</p>
             <p style={{ margin: '1px 0 0', fontSize: '8px', color: C.muted }}>{SCHOOL.address} &nbsp;•&nbsp; Ph: {SCHOOL.phone}</p>
           </div>
@@ -154,7 +149,7 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
       {arrearItems.length > 0 && (
         <div style={{ marginTop: '5px', border: '1px solid #fca5a5', borderRadius: '4px', overflow: 'hidden', flexShrink: 0 }}>
           <div style={{ background: '#fef2f2', padding: '2px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', color: '#991b1b', letterSpacing: '0.03em' }}>Arrears / Previous Outstanding Dues</span>
+            <span style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', color: '#991b1b', letterSpacing: '0.03em' }}>Outstanding / Remaining Dues (month &amp; head-wise)</span>
             <span style={{ fontSize: '9px', fontWeight: 900, color: '#991b1b' }}>Total: Rs. {arrearAmount.toLocaleString()}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>

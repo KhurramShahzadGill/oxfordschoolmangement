@@ -6,6 +6,7 @@ import Students from './pages/Students';
 import Parents from './pages/Parents';
 import Classes from './pages/Classes';
 import Fees from './pages/Fees';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 
 // Mock Auth Guard
@@ -33,6 +34,7 @@ function App() {
           <Route path="parents" element={<Parents />} />
           <Route path="classes" element={<Classes />} />
           <Route path="fees" element={<Fees />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

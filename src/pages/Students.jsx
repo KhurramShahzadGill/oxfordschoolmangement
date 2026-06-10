@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { apiStudents, apiParents, apiClasses, apiSections } from '../services/db';
+import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, peekNextStudentId, ADMISSION_HEADS } from '../services/db';
 import { Plus, Edit2, Trash2, Search as SearchIcon, Eye, FileSpreadsheet, Printer, X } from 'lucide-react';
 import { differenceInYears, parseISO, format } from 'date-fns';
 import StudentForm from '../components/StudentForm';
 import StudentProfile from '../components/StudentProfile';
+import ParentSearch from '../components/ParentSearch';
 import * as XLSX from 'xlsx';
 
 /* ───────── Column Groups for Export Modal ───────── */
@@ -177,7 +178,7 @@ export default function Students() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [parentSearch, setParentSearch] = useState('');
+  const [parentFilter, setParentFilter] = useState(null);
   const [filterClass, setFilterClass] = useState('');
   const [filterSection, setFilterSection] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -213,7 +214,14 @@ export default function Students() {
       father_occupation: form.father_occupation, father_contact: form.father_contact,
       mother_name: form.mother_name, mother_cnic: form.mother_cnic, mother_contact: form.mother_contact,
     };
-    const { parent } = await apiParents.createOrGet(parentData);
+    // If linked to an existing parent (sibling, or editing) reuse that record;
+    // otherwise find-or-create by CNIC. This avoids duplicate parent records.
+    let parent;
+    if (form.parent_id) {
+      parent = await apiParents.update(form.parent_id, parentData);
+    } else {
+      ({ parent } = await apiParents.createOrGet(parentData));
+    }
 
     const studentData = {
       id: form.id, roll_no: form.roll_no, name: form.name, dob: form.dob,
@@ -229,7 +237,17 @@ export default function Students() {
       if (editData) {
         await apiStudents.update(editData.id, studentData);
       } else {
-        await apiStudents.create(studentData);
+        const created = await apiStudents.create(studentData);
+        // Turn any entered one-time charges into collectible charge records
+        for (const { key, label } of ADMISSION_HEADS) {
+          const amount = Number(form[key] || 0);
+          if (amount > 0) {
+            await apiCustomCharges.create({
+              student_id: created.id, title: label, is_admission: true,
+              amount, amount_paid: 0, status: 'Unpaid', paid_date: null,
+            });
+          }
+        }
       }
       setShowForm(false); setEditData(null); loadData();
     } catch (err) {
@@ -282,12 +300,7 @@ export default function Students() {
       const q = searchQuery.toLowerCase();
       if (!(s.name?.toLowerCase().includes(q) || s.id?.toLowerCase().includes(q) || s.roll_no?.toLowerCase().includes(q))) return false;
     }
-    if (parentSearch) {
-      const p = parents.find(pr => pr.id === s.parent_id);
-      if (!p) return false;
-      const q = parentSearch.toLowerCase().replace(/-/g, '');
-      if (!((p.father_cnic || '').replace(/-/g, '').includes(q) || (p.mother_cnic || '').replace(/-/g, '').includes(q) || (p.father_name || '').toLowerCase().includes(parentSearch.toLowerCase()) || (p.mother_name || '').toLowerCase().includes(parentSearch.toLowerCase()))) return false;
-    }
+    if (parentFilter && s.parent_id !== parentFilter.id) return false;
     if (ageFrom || ageTo) {
       if (!s.dob) return false;
       let age = 0;
@@ -394,11 +407,9 @@ export default function Students() {
           <StudentForm
             initial={editData}
             parents={parents}
+            students={students}
             isEdit={!!editData}
-            nextId={(() => {
-              const numericIds = students.map(s => parseInt(s.id)).filter(id => !isNaN(id));
-              return numericIds.length > 0 ? Math.max(...numericIds) + 1 : students.length + 1;
-            })()}
+            nextId={peekNextStudentId()}
             onSubmit={handleFormSubmit}
             onCancel={() => { setShowForm(false); setEditData(null); }}
           />
@@ -413,12 +424,14 @@ export default function Students() {
                 placeholder="Search by Student ID, Admission No, or Name..."
                 value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
-            <div style={{ position: 'relative' }}>
-              <SearchIcon size={18} style={{ position: 'absolute', left: 14, top: 10, color: 'var(--text-secondary)' }} />
-              <input className="form-input" style={{ paddingLeft: 42, width: '100%', padding: '10px 14px 10px 42px' }}
-                placeholder="Search by Parent Name or CNIC..."
-                value={parentSearch} onChange={e => setParentSearch(e.target.value)} />
-            </div>
+            <ParentSearch
+              parents={parents}
+              students={students}
+              selected={parentFilter}
+              onSelect={setParentFilter}
+              onClear={() => setParentFilter(null)}
+              placeholder="Search Parent or any Child name to see the whole family..."
+            />
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -537,7 +550,7 @@ export default function Students() {
         <div className="print-only">
           {/* Report Header */}
           <div style={{ textAlign: 'center', borderBottom: '3px solid #4318FF', paddingBottom: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#4318FF', letterSpacing: '-0.02em' }}>Oxford Grammar School</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#4318FF', letterSpacing: '-0.02em' }}>{getSettings().school_name}</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', marginTop: 4 }}>Student List Report</div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 6, fontSize: 10, color: '#64748b', flexWrap: 'wrap' }}>
               <span>Total Students: <strong>{filtered.length}</strong></span>
@@ -595,7 +608,7 @@ export default function Students() {
           {/* Print Footer */}
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', borderTop: '1px solid #e2e8f0', paddingTop: 8 }}>
             <span>Total: {filtered.length} | Active: {activeCount} | Left: {leftCount} | Male: {maleCount} | Female: {femaleCount}</span>
-            <span>Oxford Grammar School — Confidential Report</span>
+            <span>{getSettings().school_name} — Confidential Report</span>
             <span>Printed: {format(new Date(), 'dd/MM/yyyy')} {format(new Date(), 'hh:mm a')}</span>
           </div>
         </div>

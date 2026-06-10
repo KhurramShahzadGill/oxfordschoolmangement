@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { apiClasses, apiSections } from '../services/db';
-import { formatCnic, formatMobile } from '../utils/formatters';
+import { formatCnic, formatMobile, validateCnic, validateMobile } from '../utils/formatters';
+import { compressImage } from '../utils/image';
+import ParentSearch from './ParentSearch';
 import { differenceInYears, parseISO } from 'date-fns';
 
-export default function StudentForm({ initial, parents, onSubmit, onCancel, isEdit, nextId }) {
+export default function StudentForm({ initial, parents = [], students = [], onSubmit, onCancel, isEdit, nextId }) {
   const [classes, setClasses] = useState([]);
   const [sections, setSections] = useState([]);
+  const [linkedParent, setLinkedParent] = useState(null);
   const [form, setForm] = useState({
     id: '', roll_no: '', name: '', dob: '', gender: 'Male',
     admission_date: new Date().toISOString().split('T')[0],
     leaving_date: '', medical_info: '', address: '', monthly_fee: '', fee_start_month: new Date().toISOString().split('T')[0].slice(0,7), status: 'Active',
     admission_fee: '', security_fee: '', paper_fund: '', stationery_fee: '', other_fee: '',
     class_id: '', section_id: '', picture: '',
+    parent_id: '',
     father_name: '', father_cnic: '', father_occupation: '', father_contact: '',
     mother_name: '', mother_cnic: '', mother_contact: '',
   });
@@ -28,18 +32,54 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
   const classSections = sections.filter(s => s.class_id === form.class_id);
   const age = form.dob ? differenceInYears(new Date(), parseISO(form.dob)) : '';
 
-  const handlePicture = (e) => {
+  const handlePicture = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setForm(f => ({ ...f, picture: reader.result }));
-    reader.readAsDataURL(file);
+    try {
+      // Resize + convert to WebP so the stored image stays small
+      const dataUrl = await compressImage(file, { maxDim: 600, quality: 0.8 });
+      setForm(f => ({ ...f, picture: dataUrl }));
+    } catch {
+      alert('Could not read the image file. Please try another image.');
+    }
   };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  // Link an existing parent → auto-fill their saved details (no re-typing)
+  const linkParent = (p) => {
+    setLinkedParent(p);
+    setForm(f => ({
+      ...f,
+      parent_id: p.id,
+      father_name: p.father_name || '', father_cnic: p.father_cnic || '',
+      father_occupation: p.father_occupation || '', father_contact: p.father_contact || '',
+      mother_name: p.mother_name || '', mother_cnic: p.mother_cnic || '', mother_contact: p.mother_contact || '',
+    }));
+  };
+
+  const unlinkParent = () => {
+    setLinkedParent(null);
+    setForm(f => ({
+      ...f,
+      parent_id: '',
+      father_name: '', father_cnic: '', father_occupation: '', father_contact: '',
+      mother_name: '', mother_cnic: '', mother_contact: '',
+    }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Fields are optional, but anything filled in must be in a valid format
+    const checks = [
+      [form.father_cnic,     validateCnic,   "Father's CNIC must be complete: 00000-0000000-0"],
+      [form.mother_cnic,     validateCnic,   "Mother's CNIC must be complete: 00000-0000000-0"],
+      [form.father_contact,  validateMobile, "Father's Contact must be complete: 0000-0000000"],
+      [form.mother_contact,  validateMobile, "Mother's Contact must be complete: 0000-0000000"],
+    ];
+    for (const [value, validate, message] of checks) {
+      if (value && !validate(value)) { alert(message); return; }
+    }
     onSubmit(form);
   };
 
@@ -131,7 +171,8 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
         </div>
 
         {/* Admission / One-Time Charges Section */}
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Admission / One-Time Charges</h3>
+        <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Admission / One-Time Charges</h3>
+        {!isEdit && <p className="text-xs text-secondary-color mb-2">Any amount entered here becomes a one-time due in the Fee Voucher (collectible &amp; tracked in history).</p>}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="form-group">
             <label className="form-label">Admission Fee (Rs.)</label>
@@ -157,6 +198,29 @@ export default function StudentForm({ initial, parents, onSubmit, onCancel, isEd
 
         {/* Parent Info Section */}
         <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Parent / Guardian Information</h3>
+
+        {/* Link an existing parent (for siblings) so details don't need re-typing */}
+        {!isEdit && (
+          <div style={{ marginBottom: 14, padding: 12, background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10 }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              Adding a sibling? Search an existing parent to auto-fill their details:
+            </div>
+            <ParentSearch
+              parents={parents}
+              students={students}
+              selected={linkedParent}
+              onSelect={linkParent}
+              onClear={unlinkParent}
+              placeholder="Search existing Parent by Name, CNIC, Contact or Child's name..."
+            />
+            {linkedParent && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600, marginTop: 8 }}>
+                ✓ Linked to existing parent — details filled below. The new student will join this family.
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="form-group">
             <label className="form-label">Father's Name</label>

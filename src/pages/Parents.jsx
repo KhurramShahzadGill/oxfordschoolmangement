@@ -1,29 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { apiParents, apiStudents } from '../services/db';
-import { Edit2, Trash2, Search as SearchIcon, Users } from 'lucide-react';
-import { formatCnic, formatMobile } from '../utils/formatters';
+import { Edit2, Trash2, Users } from 'lucide-react';
+import { formatCnic, formatMobile, validateCnic, validateMobile } from '../utils/formatters';
+import ParentSearch from '../components/ParentSearch';
 
 export default function Parents() {
   const [parents, setParents] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedParent, setSelectedParent] = useState(null);
   const [expandedParent, setExpandedParent] = useState(null);
   const [parentStudents, setParentStudents] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  const loadParents = async (query = '') => {
+  const loadAll = async () => {
     setLoading(true);
-    const data = query ? await apiParents.search(query) : await apiParents.getAll();
-    setParents(data);
+    const [pData, sData] = await Promise.all([apiParents.getAll(), apiStudents.getAll()]);
+    setParents(pData);
+    setAllStudents(sData);
     setLoading(false);
   };
 
-  useEffect(() => { loadParents(); }, []);
+  useEffect(() => { loadAll(); }, []);
 
-  const handleSearch = (e) => {
-    setSearchQuery(e.target.value);
-    loadParents(e.target.value);
+  const handleSelectParent = async (p) => {
+    setSelectedParent(p);
+    setExpandedParent(p.id);
+    const students = await apiStudents.getByParentId(p.id);
+    setParentStudents(students);
   };
 
   const toggleExpand = async (parentId) => {
@@ -42,9 +47,18 @@ export default function Parents() {
   };
 
   const saveEdit = async () => {
+    const checks = [
+      [editForm.father_cnic,    validateCnic,   "Father's CNIC must be complete: 00000-0000000-0"],
+      [editForm.mother_cnic,    validateCnic,   "Mother's CNIC must be complete: 00000-0000000-0"],
+      [editForm.father_contact, validateMobile, "Father's Contact must be complete: 0000-0000000"],
+      [editForm.mother_contact, validateMobile, "Mother's Contact must be complete: 0000-0000000"],
+    ];
+    for (const [value, validate, message] of checks) {
+      if (value && !validate(value)) { alert(message); return; }
+    }
     await apiParents.update(editingId, editForm);
     setEditingId(null);
-    loadParents(searchQuery);
+    loadAll();
   };
 
   // Delete a parent along with all of their linked student records
@@ -62,7 +76,8 @@ export default function Parents() {
     await apiParents.delete(p.id);
 
     if (expandedParent === p.id) setExpandedParent(null);
-    loadParents(searchQuery);
+    if (selectedParent?.id === p.id) setSelectedParent(null);
+    loadAll();
   };
 
   return (
@@ -74,16 +89,24 @@ export default function Parents() {
 
       {/* Search */}
       <div className="card mb-6">
-        <div style={{ position: 'relative' }}>
-          <SearchIcon size={18} style={{ position: 'absolute', left: 14, top: 12, color: 'var(--text-secondary)' }} />
-          <input className="form-input" style={{ paddingLeft: 42 }}
-            placeholder="Search by CNIC, Father Name, or Mother Name..."
-            value={searchQuery} onChange={handleSearch} />
-        </div>
+        <ParentSearch
+          parents={parents}
+          students={allStudents}
+          selected={selectedParent}
+          onSelect={handleSelectParent}
+          onClear={() => { setSelectedParent(null); setExpandedParent(null); }}
+          placeholder="Search by Parent or any Child name (or CNIC / Contact / ID)..."
+        />
       </div>
 
       {/* Table */}
       <div className="card">
+        {selectedParent && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            <span>Showing 1 selected parent. Their enrolled children are listed below.</span>
+            <button className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: '0.75rem' }} onClick={() => { setSelectedParent(null); setExpandedParent(null); }}>Show all parents</button>
+          </div>
+        )}
         {loading ? <p style={{ padding: 24, textAlign: 'center' }}>Loading...</p> : (
           <div className="table-container">
             <table className="data-table">
@@ -91,9 +114,9 @@ export default function Parents() {
                 <tr><th>CNIC (ID)</th><th>Father Name</th><th>Mother Name</th><th>Contact</th><th style={{ textAlign: 'right' }}>Actions</th></tr>
               </thead>
               <tbody>
-                {parents.length === 0 ? (
+                {(() => { const displayParents = selectedParent ? parents.filter(p => p.id === selectedParent.id) : parents; return displayParents.length === 0 ? (
                   <tr><td colSpan="5" style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>No parent records found.</td></tr>
-                ) : parents.map(p => (
+                ) : displayParents.map(p => (
                   <React.Fragment key={p.id}>
                     {editingId === p.id ? (
                       <tr>
@@ -155,7 +178,7 @@ export default function Parents() {
                       </>
                     )}
                   </React.Fragment>
-                ))}
+                )); })()}
               </tbody>
             </table>
           </div>

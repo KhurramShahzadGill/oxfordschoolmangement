@@ -1,16 +1,19 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  UserSquare2, 
-  BookOpen, 
+import {
+  LayoutDashboard,
+  Users,
+  UserSquare2,
+  BookOpen,
   Receipt,
+  Settings as SettingsIcon,
   LogOut
 } from 'lucide-react';
+import { getSettings } from '../services/db';
 
 export default function Layout() {
   const navigate = useNavigate();
+  const settings = getSettings();
 
   // Mock logout
   const handleLogout = () => {
@@ -23,7 +26,7 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className="sidebar no-print">
         <div className="sidebar-header" style={{ justifyContent: 'center' }}>
-          <img src="/logo.png" alt="Oxford Grammar" style={{ height: '50px', objectFit: 'contain', maxWidth: '100%' }} />
+          <img src={settings.logo || '/logo.png'} alt={settings.school_name} style={{ height: '50px', objectFit: 'contain', maxWidth: '100%' }} />
         </div>
         
         <nav className="nav-links">
@@ -46,6 +49,10 @@ export default function Layout() {
           <NavLink to="/fees" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Receipt size={20} />
             Fees
+          </NavLink>
+          <NavLink to="/settings" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+            <SettingsIcon size={20} />
+            Settings
           </NavLink>
         </nav>
         

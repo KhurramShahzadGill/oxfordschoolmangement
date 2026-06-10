@@ -1,273 +1,131 @@
 import React from 'react';
+import { Phone, MapPin, User, CalendarDays, GraduationCap } from 'lucide-react';
+import { getSettings } from '../services/db';
 
 export default function StudentCard({ student, parent, className, sectionName }) {
   if (!student) return null;
+  const school = getSettings();
 
-  // Format date helper (YYYY-MM-DD to DD-MM-YYYY)
+  // YYYY-MM-DD → DD-MM-YYYY
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
-    try {
-      const parts = dateStr.split('-');
-      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-      return dateStr;
-    } catch {
-      return dateStr;
-    }
+    const parts = dateStr.split('-');
+    return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
   };
 
-  const calculateAge = (dob) => {
-    if (!dob) return '-';
-    try {
-      const birthDate = new Date(dob);
-      const today = new Date();
-      let years = today.getFullYear() - birthDate.getFullYear();
-      let months = today.getMonth() - birthDate.getMonth();
-      if (months < 0 || (months === 0 && today.getDate() < birthDate.getDate())) {
-        years--;
-        months += 12;
-      }
-      if (today.getDate() < birthDate.getDate()) {
-        months--;
-        if (months < 0) {
-          months += 12;
-        }
-      }
-      return `${years}Y ${months}M`;
-    } catch {
-      return '-';
-    }
-  };
+  const GRAD = 'linear-gradient(120deg, #4318FF 0%, #7c3aed 45%, #ec4899 100%)';
 
-  const cardStyle = {
-    width: '400px',
-    height: '280px',
-    background: '#f8f8f8',
-    borderRadius: '8px',
-    boxShadow: '0 0 10px rgba(0,0,0,0.3)',
-    position: 'relative',
-    overflow: 'hidden',
-    fontFamily: "'Arial', sans-serif",
-    border: '2px solid #ccc',
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
-  const headerStyle = {
-    height: '75px',
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'flex-start',
-    padding: '8px 15px',
-    zIndex: 1,
-  };
-
-  const svgBg = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    zIndex: -1,
-  };
-
-  const schoolInfo = {
-    marginLeft: '60px', // space for logo
-    flex: 1,
-    paddingTop: '5px',
-  };
-
-  const schoolName = {
-    fontSize: '18px',
-    fontWeight: '900',
-    color: '#000000',
-    textTransform: 'uppercase',
-    margin: 0,
-    letterSpacing: '0.5px',
-  };
-
-  const cardTitle = {
-    fontSize: '12px',
-    color: '#ed6c3c',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    margin: 0,
-    marginTop: '2px',
-    letterSpacing: '1px',
-    textAlign: 'center',
-    paddingRight: '40px',
-  };
-
-  const bodyStyle = {
-    display: 'flex',
-    flex: 1,
-    padding: '5px 15px 10px',
-  };
-
-  const detailsContainer = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-  };
-
-  const studentNameStyle = {
-    fontSize: '20px',
-    fontWeight: '900',
-    color: '#385387',
-    marginBottom: '8px',
-    textTransform: 'uppercase',
-    marginTop: '5px',
-  };
-
-  const photoContainer = {
-    width: '85px',
-    marginLeft: '15px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    paddingTop: '10px',
-  };
-
-  const photoFrame = {
-    width: '80px',
-    height: '100px',
-    borderRadius: '4px',
-    border: '2px solid #333',
-    overflow: 'hidden',
-    background: '#4da6ff', // Default blue bg like the image
-  };
-
-  const signText = {
-    fontSize: '10px',
-    color: '#333',
-    marginTop: 'auto',
-    marginBottom: '5px',
-    fontWeight: 'bold',
-  };
-
-  const footerStyle = {
-    height: '24px',
-    background: '#ffffff',
-    color: '#1a237e',
-    fontSize: '11px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 'bold',
-    borderTop: '2px solid #5a76a8',
-  };
-
-  const FieldRow = ({ label, value, fullWidth }) => (
-    <div style={{
-      display: 'flex',
-      border: '1px solid #28a745', // Match green theme
-      borderRadius: '6px',
-      height: '22px',
-      alignItems: 'center',
-      marginBottom: '4px',
-      width: fullWidth ? '100%' : '49%',
-      background: 'white',
-      overflow: 'hidden'
-    }}>
-      <div style={{
-        background: '#28a745', // Green background
-        color: '#800000',      // Maroon text
-        height: '100%',
-        padding: '0 8px',
-        fontSize: '10px',
-        fontWeight: '900',     // Extra bold for visibility
-        display: 'flex',
-        alignItems: 'center',
-        flexShrink: 0
-      }}>
-        {label}
+  const Field = ({ icon: Icon, iconColor, iconBg, label, value, wide }) => (
+    <div style={{ width: wide ? '100%' : '48.5%', display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+      <div style={{ width: 22, height: 22, borderRadius: 7, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={12} color={iconColor} strokeWidth={2.5} />
       </div>
-      <div style={{
-        flex: 1,
-        padding: '0 6px',      // Data starts immediately next to label
-        fontSize: '12px',
-        fontWeight: 'bold',
-        color: '#0d47a1',      // Blue text for data
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis'
-      }}>
-        {value}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 7, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', lineHeight: 1 }}>{label}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>{value || '-'}</div>
       </div>
     </div>
   );
+
   return (
-    <div style={cardStyle} className="id-card-component">
-      {/* Header with SVG curves */}
-      <div style={headerStyle}>
-        <svg style={svgBg} viewBox="0 0 400 75" preserveAspectRatio="none">
-          {/* Grey shadow curve */}
-          <path d="M0,0 L400,0 L400,65 Q200,85 0,55 Z" fill="#b0b5c0" />
-          {/* Blue main curve */}
-          <path d="M0,0 L400,0 L400,55 Q200,75 0,45 Z" fill="#5a76a8" />
-        </svg>
+    <div className="id-card-component" style={{
+      width: 400, height: 260, background: '#ffffff', borderRadius: 16,
+      boxShadow: '0 8px 24px rgba(67,24,255,0.25)', overflow: 'hidden', position: 'relative',
+      fontFamily: '"Outfit", "Inter", Arial, sans-serif', display: 'flex', flexDirection: 'column',
+      border: '1px solid #e0e7ff',
+    }}>
+      {/* ── Colorful Header ── */}
+      <div style={{ background: GRAD, padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative', overflow: 'hidden' }}>
+        {/* Decorative bubbles */}
+        <div style={{ position: 'absolute', width: 90, height: 90, borderRadius: '50%', background: 'rgba(255,255,255,0.12)', top: -45, right: 30 }} />
+        <div style={{ position: 'absolute', width: 56, height: 56, borderRadius: '50%', background: 'rgba(255,255,255,0.10)', bottom: -28, right: 110 }} />
+        <div style={{ position: 'absolute', width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.14)', top: -10, left: 150 }} />
 
-        {/* Logo placed over the curve */}
-        <div style={{
-          position: 'absolute',
-          left: '10px',
-          top: '5px',
-          width: '60px',
-          height: '60px',
-          background: 'white',
-          borderRadius: '50%',
-          border: '2px solid #ed6c3c',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-        }}>
-          <img src="/logo.png" alt="Logo" style={{ width: '90%', height: '90%', objectFit: 'contain' }} />
+        <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, boxShadow: '0 0 0 3px rgba(255,255,255,0.35)', zIndex: 1 }}>
+          <img src={school.logo || '/logo.png'} alt="Logo" style={{ width: '85%', height: '85%', objectFit: 'contain' }} />
         </div>
-
-        <div style={schoolInfo}>
-          <h1 style={schoolName}>Oxford Grammar School</h1>
-          <p style={cardTitle}>Student Card</p>
+        <div style={{ flex: 1, minWidth: 0, zIndex: 1 }}>
+          <div style={{ fontSize: 15.5, fontWeight: 900, color: 'white', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textShadow: '0 1px 3px rgba(0,0,0,0.25)' }}>
+            {school.school_name}
+          </div>
+          <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase', letterSpacing: '0.14em', marginTop: 2, fontWeight: 600 }}>
+            {school.tagline}
+          </div>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '4px 9px', textAlign: 'center', zIndex: 1, boxShadow: '0 2px 6px rgba(0,0,0,0.18)' }}>
+          <div style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.06em', background: GRAD, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1.25 }}>
+            Student<br />ID Card
+          </div>
         </div>
       </div>
 
-      <div style={bodyStyle}>
-        <div style={detailsContainer}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '4px', marginTop: '5px' }}>
-            <h2 style={{ ...studentNameStyle, margin: 0 }}>{student.name}</h2>
-            <div style={{ fontSize: '13px', color: '#385387', fontWeight: 'bold', paddingBottom: '2px', marginRight: '5px' }}>
-              ID: {student.id} | Admission No: {student.roll_no || '-'}
+      {/* Rainbow accent line */}
+      <div style={{ height: 3.5, background: 'linear-gradient(90deg,#f59e0b,#ec4899,#7c3aed,#4318FF,#06b6d4,#10b981)' }} />
+
+      {/* ── Body ── */}
+      <div style={{ flex: 1, display: 'flex', padding: '9px 14px 4px', gap: 12, position: 'relative' }}>
+        {/* Soft background tint */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #ffffff 55%, #f5f3ff 100%)', pointerEvents: 'none' }} />
+
+        {/* Details */}
+        <div style={{ flex: 1, minWidth: 0, zIndex: 1 }}>
+          <div style={{ fontSize: 16.5, fontWeight: 900, color: '#1e1b4b', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15 }}>
+            {student.name}
+          </div>
+          <div style={{ width: 46, height: 3, background: GRAD, borderRadius: 99, margin: '3px 0 7px' }} />
+
+          {/* ID chips */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ background: '#4318FF', color: 'white', fontSize: 9, fontWeight: 800, borderRadius: 6, padding: '2.5px 9px', boxShadow: '0 2px 5px rgba(67,24,255,0.3)' }}>
+              ID: {student.id}
+            </span>
+            <span style={{ background: '#ec4899', color: 'white', fontSize: 9, fontWeight: 800, borderRadius: 6, padding: '2.5px 9px', boxShadow: '0 2px 5px rgba(236,72,153,0.3)' }}>
+              Adm No: {student.roll_no || '-'}
+            </span>
+            <span style={{ background: '#06b6d4', color: 'white', fontSize: 9, fontWeight: 800, borderRadius: 6, padding: '2.5px 9px', boxShadow: '0 2px 5px rgba(6,182,212,0.3)' }}>
+              <GraduationCap size={9} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3 }} />
+              {className || '-'}{sectionName ? ` (${sectionName})` : ''}
+            </span>
+          </div>
+
+          {/* Fields */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            <Field icon={User} iconColor="#7c3aed" iconBg="#f3e8ff" label="Father's Name" value={parent?.father_name} wide />
+            <Field icon={Phone} iconColor="#059669" iconBg="#d1fae5" label="Father's Contact" value={parent?.father_contact} />
+            <Field icon={CalendarDays} iconColor="#d97706" iconBg="#fef3c7" label="Date of Birth" value={formatDate(student.dob)} />
+          </div>
+        </div>
+
+        {/* Photo + sign */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, zIndex: 1 }}>
+          <div style={{ padding: 3, borderRadius: 12, background: GRAD, boxShadow: '0 4px 12px rgba(124,58,237,0.35)' }}>
+            <div style={{ width: 78, height: 92, borderRadius: 9, overflow: 'hidden', background: '#f1f5f9', border: '2px solid white' }}>
+              {student.picture ? (
+                <img src={student.picture} alt={student.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 9, fontWeight: 700 }}>
+                  No Photo
+                </div>
+              )}
             </div>
           </div>
-          
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%' }}>
-            <FieldRow label="F/Name" value={parent?.father_name || '-'} fullWidth />
-            <FieldRow label="F/Cont." value={parent?.father_contact || '-'} fullWidth />
-            <FieldRow label="Class" value={className || '-'} />
-            <FieldRow label="Section" value={sectionName || '-'} />
-            <FieldRow label="DOB" value={formatDate(student.dob)} fullWidth />
-          </div>
-        </div>
-
-        <div style={photoContainer}>
-          <div style={photoFrame}>
-            {student.picture ? (
-              <img src={student.picture} alt={student.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                 No Image
-              </div>
-            )}
-          </div>
-          <div style={signText}>
-            Principal Sign:
+          <div style={{ marginTop: 'auto', textAlign: 'center', width: 88, paddingBottom: 2 }}>
+            <div style={{ borderTop: '1.5px solid #c4b5fd', paddingTop: 2, fontSize: 7, fontWeight: 800, color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Principal Signature
+            </div>
           </div>
         </div>
       </div>
 
-      <div style={footerStyle}>
-        Chak No. 202/RB, Gatti Faisalabad | Ph: 0321-6088202
+      {/* ── Footer: school contact & address ── */}
+      <div style={{ background: 'linear-gradient(120deg, #1e1b4b 0%, #312e81 100%)', color: 'white', padding: '5.5px 14px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 8.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <MapPin size={10} color="#f9a8d4" strokeWidth={2.5} /> {school.address}
+        </span>
+        <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.25)', flexShrink: 0 }} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 8.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+          <Phone size={10} color="#86efac" strokeWidth={2.5} /> {school.phone}
+        </span>
       </div>
     </div>
   );

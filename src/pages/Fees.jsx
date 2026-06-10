@@ -1,25 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { apiFees, apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges } from '../services/db';
+import { apiFees, apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings } from '../services/db';
 import { X, ChevronDown, ChevronRight, Receipt, Printer, History, FileSpreadsheet } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import FeeVoucher from '../components/FeeVoucher';
+import ParentSearch from '../components/ParentSearch';
 import * as XLSX from 'xlsx';
 
 const fmtM = (m) => { try { return format(parseISO(m + '-01'), 'MMM yyyy'); } catch { return m; } };
 const nextMonth = (m) => { const [y, mo] = m.split('-').map(Number); return mo === 12 ? `${y+1}-01` : `${y}-${String(mo+1).padStart(2,'0')}`; };
 
-/* One-time admission charges captured in the student profile. Each tracks a `<key>_paid` amount. */
-const ADMISSION_HEADS = [
-  { key: 'admission_fee',  label: 'Admission Fee' },
-  { key: 'security_fee',   label: 'Security Fee' },
-  { key: 'paper_fund',     label: 'Paper Fund' },
-  { key: 'stationery_fee', label: 'Stationery Fee' },
-  { key: 'other_fee',      label: 'Others' },
-];
-const getAdmissionDues = (student) => ADMISSION_HEADS
-  .map(h => ({ ...h, amount: Number(student[h.key] || 0), paid: Number(student[h.key + '_paid'] || 0) }))
-  .map(h => ({ ...h, balance: h.amount - h.paid }))
-  .filter(h => h.balance > 0);
+// Fee snapshot: each fee record stores the monthly_fee that applied for that month,
+// so changing a student's fee later never rewrites past dues.
+const monthDue = (student, rec) => Number(rec?.monthly_fee ?? student?.monthly_fee ?? 0);
+
+// Charge heads available in the "Add Charge" picker during collection
+const CHARGE_HEADS = ['Fine', 'Admission Fee', 'Security Fee', 'Paper Fund', 'Stationery Fee', 'Other Charges'];
 
 /* ───────── Column Groups for Fee Export Modal ───────── */
 const FEE_COL_GROUPS = [
@@ -169,13 +164,14 @@ export default function Fees() {
   const [filterSection, setFilterSection] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
-  const [parentSearch, setParentSearch] = useState('');
+  const [parentFilter, setParentFilter] = useState(null);
 
   const [payStudent, setPayStudent] = useState(null);
   // CollectionItems: [{ month, type: 'Monthly Fee' | 'Fine' | 'Paper Fund' | 'Other', payable, paying }]
   const [collectionItems, setCollectionItems] = useState([]);
-  const [fineDesc, setFineDesc] = useState('');
-  const [fineAmount, setFineAmount] = useState('');
+  const [chargeType, setChargeType] = useState('Fine');
+  const [chargeDesc, setChargeDesc] = useState('');
+  const [chargeAmount, setChargeAmount] = useState('');
   const [printData, setPrintData] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [historyStudent, setHistoryStudent] = useState(null);
@@ -213,7 +209,7 @@ export default function Fees() {
     let m = start;
     while (m < fromMonth) {
       const rec = getFee(student.id, m);
-      const totalDue = Number(student.monthly_fee || 0) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+      const totalDue = monthDue(student, rec) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
       if (Number(rec?.amount_paid || 0) < totalDue) arr.push(m);
       m = nextMonth(m);
     }
@@ -227,7 +223,7 @@ export default function Fees() {
       let m = start;
       while (m < fromMonth) {
         const rec = getFee(student.id, m);
-        const totalDue = Number(student.monthly_fee || 0) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+        const totalDue = monthDue(student, rec) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
         const bal = totalDue - Number(rec?.amount_paid || 0);
         if (bal > 0) amount += bal;
         m = nextMonth(m);
@@ -238,7 +234,27 @@ export default function Fees() {
       const bal = Number(c.amount) - Number(c.amount_paid || 0);
       if (bal > 0) amount += bal;
     });
-    getAdmissionDues(student).forEach(h => { amount += h.balance; });
+    return amount;
+  };
+
+  // Full outstanding balance up to the current month (used by the Family view)
+  const getTotalOutstanding = (student) => {
+    let amount = 0;
+    const start = student.fee_start_month;
+    if (start) {
+      let m = start;
+      while (m <= curMonth) {
+        const rec = getFee(student.id, m);
+        const totalDue = monthDue(student, rec) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+        const bal = totalDue - Number(rec?.amount_paid || 0);
+        if (bal > 0) amount += bal;
+        m = nextMonth(m);
+      }
+    }
+    customCharges.filter(c => c.student_id === student.id).forEach(c => {
+      const bal = Number(c.amount) - Number(c.amount_paid || 0);
+      if (bal > 0) amount += bal;
+    });
     return amount;
   };
 
@@ -248,7 +264,7 @@ export default function Fees() {
     months.forEach(m => {
       if (student.fee_start_month && m < student.fee_start_month) return;
       const rec = getFee(student.id, m);
-      const totalDue = Number(student.monthly_fee || 0) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+      const totalDue = monthDue(student, rec) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
       const bal = totalDue - Number(rec?.amount_paid || 0);
       
       if (rec) paidAmt += Number(rec.amount_paid || 0);
@@ -263,7 +279,6 @@ export default function Fees() {
       if (bal <= 0) { paid++; }
       else { unpaid++; unpaidAmt += bal; }
     });
-    getAdmissionDues(student).forEach(h => { unpaid++; unpaidAmt += h.balance; });
     return { paid, unpaid, paidAmt, unpaidAmt };
   };
 
@@ -276,12 +291,7 @@ export default function Fees() {
       const q = studentSearch.toLowerCase();
       if (!(s.id?.toLowerCase().includes(q) || s.roll_no?.toLowerCase().includes(q) || s.name?.toLowerCase().includes(q))) return false;
     }
-    if (parentSearch) {
-      const p = getParent(s.parent_id);
-      if (!p) return false;
-      const q = parentSearch.toLowerCase().replace(/-/g,'');
-      if (!((p.father_cnic||'').replace(/-/g,'').includes(q)||(p.mother_cnic||'').replace(/-/g,'').includes(q)||(p.father_name||'').toLowerCase().includes(parentSearch.toLowerCase())||(p.mother_name||'').toLowerCase().includes(parentSearch.toLowerCase()))) return false;
-    }
+    if (parentFilter && s.parent_id !== parentFilter.id) return false;
     if (filterStatus) {
       const ps = getPeriodStatus(s);
       if (filterStatus === 'Paid' && ps.unpaid > 0) return false;
@@ -296,7 +306,7 @@ export default function Fees() {
     months.forEach(m => {
       if (s.fee_start_month && m < s.fee_start_month) return;
       const rec = getFee(s.id, m);
-      const totalDue = Number(s.monthly_fee || 0) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+      const totalDue = monthDue(s, rec) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
       const bal = totalDue - Number(rec?.amount_paid || 0);
       acc.collected += Number(rec?.amount_paid || 0);
       acc.pending += Math.max(0, bal);
@@ -324,7 +334,7 @@ export default function Fees() {
     grouped[key].students.push(s);
   });
 
-  useEffect(() => { const e={}; Object.keys(grouped).forEach(k=>e[k]=true); setExpandedGroups(e); }, [filterClass,filterSection,studentSearch,parentSearch,fromMonth,toMonth,filterStatus]);
+  useEffect(() => { const e={}; Object.keys(grouped).forEach(k=>e[k]=true); setExpandedGroups(e); }, [filterClass,filterSection,studentSearch,parentFilter,fromMonth,toMonth,filterStatus]);
   const toggleGroup = (k) => setExpandedGroups(p=>({...p,[k]:!p[k]}));
 
   const openPayModal = (s) => {
@@ -332,7 +342,7 @@ export default function Fees() {
     const currentMonths = monthRange(fromMonth, toMonth).filter(m => {
       if (s.fee_start_month && m < s.fee_start_month) return false;
       const rec = getFee(s.id, m);
-      const totalDue = Number(s.monthly_fee || 0) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+      const totalDue = monthDue(s, rec) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
       return Number(rec?.amount_paid || 0) < totalDue;
     });
 
@@ -340,7 +350,7 @@ export default function Fees() {
     [...arrears, ...currentMonths].forEach(m => {
       const existing = getFee(s.id, m);
       const paidAlready = Number(existing?.amount_paid || 0);
-      const monthlyDue = Number(s.monthly_fee || 0);
+      const monthlyDue = monthDue(s, existing);
 
       // Only the monthly fee is auto-listed. Fines are added manually via the "Save Fine" button.
       const remainingMonthly = Math.max(0, monthlyDue - paidAlready);
@@ -349,12 +359,7 @@ export default function Fees() {
       }
     });
 
-    // One-time admission charges (from profile) appear as dues until fully paid
-    getAdmissionDues(s).forEach(h => {
-      items.push({ admissionKey: h.key, month: 'N/A', type: h.label, payable: h.balance, paying: h.balance, isMarkedPaid: false, isAdmission: true });
-    });
-
-    // Outstanding fines (stored as custom charges) appear as dues
+    // All outstanding charges (admission, paper fund, fine, etc.) appear as dues
     const myCharges = customCharges.filter(c => c.student_id === s.id);
     myCharges.forEach(c => {
       const bal = Number(c.amount) - Number(c.amount_paid || 0);
@@ -367,18 +372,18 @@ export default function Fees() {
     setCollectionItems(items);
   };
 
-  const addFine = async () => {
+  const addCharge = async () => {
     if (!payStudent) return;
-    const amount = Number(fineAmount);
-    if (!amount || amount <= 0) { alert('Please enter the fine amount.'); return; }
-    const title = fineDesc.trim() ? `Fine (${fineDesc.trim()})` : 'Fine';
+    const amount = Number(chargeAmount);
+    if (!amount || amount <= 0) { alert('Please enter the charge amount.'); return; }
+    const title = chargeDesc.trim() ? `${chargeType} (${chargeDesc.trim()})` : chargeType;
     const created = await apiCustomCharges.create({
       student_id: payStudent.id, title, amount,
       amount_paid: 0, status: 'Unpaid', paid_date: null,
     });
     await loadData();
     setCollectionItems(prev => [...prev, { charge_id: created.id, month: 'N/A', type: title, payable: amount, paying: amount, isMarkedPaid: true, isCustom: true }]);
-    setFineDesc(''); setFineAmount('');
+    setChargeDesc(''); setChargeAmount('');
   };
 
   const handlePay = async (e) => {
@@ -433,11 +438,13 @@ export default function Fees() {
       for (const month in monthsData) {
         const existing = getFee(payStudent.id, month);
         const newTotalPaid = (existing ? Number(existing.amount_paid || 0) : 0) + monthsData[month].total_paying;
-        const totalExpected = Number(payStudent.monthly_fee || 0) + monthsData[month].fine + monthsData[month].paper_fund + monthsData[month].other_charges;
+        const totalExpected = monthDue(payStudent, existing) + monthsData[month].fine + monthsData[month].paper_fund + monthsData[month].other_charges;
 
         const data = {
           student_id: payStudent.id,
           month,
+          // Lock the monthly fee for this month; keep the original snapshot on updates
+          monthly_fee: existing?.monthly_fee !== undefined ? Number(existing.monthly_fee) : Number(payStudent.monthly_fee || 0),
           fine: monthsData[month].fine,
           paper_fund: monthsData[month].paper_fund,
           other_charges: monthsData[month].other_charges,
@@ -450,18 +457,6 @@ export default function Fees() {
       }
     }
 
-    // One-time admission charges → accumulate paid amount on the student record
-    const admissionItems = paidItems.filter(i => i.isAdmission);
-    if (admissionItems.length > 0) {
-      const updates = {};
-      admissionItems.forEach(i => {
-        const key = i.admissionKey + '_paid';
-        const prev = updates[key] !== undefined ? updates[key] : Number(payStudent[key] || 0);
-        updates[key] = prev + Number(i.paying);
-      });
-      await apiStudents.update(payStudent.id, updates);
-    }
-
     loadData();
   };
 
@@ -469,42 +464,33 @@ export default function Fees() {
     const monthlyItems = items.filter(i => !i.isCustom);
     const months = [...new Set(monthlyItems.map(i => i.month))];
     const primaryMonth = months[months.length - 1] || curMonth;
-    
+
+    // How much is being paid right now, per month and per charge
+    const payingByMonth = {};
+    monthlyItems.forEach(i => { payingByMonth[i.month] = (payingByMonth[i.month] || 0) + Number(i.paying || 0); });
+    const payingByCharge = {};
+    items.filter(i => i.isCustom).forEach(i => { payingByCharge[i.charge_id] = (payingByCharge[i.charge_id] || 0) + Number(i.paying || 0); });
+
     const start = student.fee_start_month;
     const allUnpaid = [];
     if (start) {
       let m = start;
       const today = format(new Date(), 'yyyy-MM');
       while (m <= today) {
-        const isBeingPaid = items.some(i => !i.isCustom && i.month === m);
-        if (!isBeingPaid) {
-          const rec = getFee(student.id, m);
-          const totalDue = Number(student.monthly_fee || 0) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
-          const bal = totalDue - Number(rec?.amount_paid || 0);
-          if (bal > 0) {
-            allUnpaid.push({ month: m, balance: bal });
-          }
-        }
+        const rec = getFee(student.id, m);
+        const totalDue = monthDue(student, rec) + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+        // Remaining after the amount already on record AND what is being paid in this voucher
+        const remaining = totalDue - Number(rec?.amount_paid || 0) - (payingByMonth[m] || 0);
+        if (remaining > 0) allUnpaid.push({ month: m, balance: remaining });
         m = nextMonth(m);
       }
     }
 
     const myCharges = customCharges.filter(c => c.student_id === student.id);
     myCharges.forEach(c => {
-      const isBeingPaid = items.some(i => i.charge_id === c.id);
-      if (!isBeingPaid) {
-        const bal = Number(c.amount) - Number(c.amount_paid || 0);
-        if (bal > 0) {
-          allUnpaid.push({ month: c.title, balance: bal, isCustom: true });
-        }
-      }
-    });
-
-    // One-time admission charges not being paid now → show as dues
-    getAdmissionDues(student).forEach(h => {
-      const isBeingPaid = items.some(i => i.isAdmission && i.admissionKey === h.key);
-      if (!isBeingPaid) {
-        allUnpaid.push({ month: h.label, balance: h.balance, isCustom: true });
+      const remaining = Number(c.amount) - Number(c.amount_paid || 0) - (payingByCharge[c.id] || 0);
+      if (remaining > 0) {
+        allUnpaid.push({ month: c.title, balance: remaining, isCustom: true });
       }
     });
 
@@ -625,12 +611,80 @@ export default function Fees() {
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <input className="form-input" style={{ flex: 1, minWidth: 200, ...inp }} placeholder="Student ID, Admission No, Name..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
-            <input className="form-input" style={{ flex: 1, minWidth: 200, ...inp }} placeholder="Parent CNIC, Name..." value={parentSearch} onChange={e => setParentSearch(e.target.value)} />
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <ParentSearch
+                parents={parents}
+                students={students}
+                selected={parentFilter}
+                onSelect={setParentFilter}
+                onClear={() => setParentFilter(null)}
+                placeholder="Search Parent OR any Child name — see the whole family..."
+              />
+            </div>
           </div>
         </div>
 
+        {/* Family Tree — full sibling sheet shown when a parent (or one of their children) is selected */}
+        {parentFilter && !loading && (() => {
+          const familyKids = students.filter(s => s.parent_id === parentFilter.id);
+          const rows = familyKids.map(s => ({ s, due: getTotalOutstanding(s) }));
+          const familyDue = rows.reduce((sum, r) => sum + r.due, 0);
+          const pendingCount = rows.filter(r => r.due > 0).length;
+          return (
+            <div className="card mb-6" style={{ padding: 0, overflow: 'hidden', border: '1px solid #c7d2fe' }}>
+              <div style={{ background: 'linear-gradient(135deg,#4318FF,#7c3aed)', padding: '16px 22px', color: 'white', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.8, fontWeight: 700 }}>Family Fee Sheet</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{parentFilter.father_name || 'Parent'}</div>
+                  <div style={{ fontSize: '0.76rem', opacity: 0.85 }}>
+                    {parentFilter.father_cnic && `CNIC ${parentFilter.father_cnic}`}{parentFilter.father_contact && `   ·   📞 ${parentFilter.father_contact}`}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.8, fontWeight: 700 }}>Total Family Outstanding</div>
+                  <div style={{ fontSize: '1.7rem', fontWeight: 900, lineHeight: 1.1 }}>Rs. {familyDue.toLocaleString()}</div>
+                  <div style={{ fontSize: '0.74rem', opacity: 0.9 }}>{familyKids.length} child{familyKids.length !== 1 ? 'ren' : ''} · {pendingCount} with pending fee</div>
+                </div>
+              </div>
+              <table className="data-table" style={{ marginBottom: 0 }}>
+                <thead><tr><th>Child Name</th><th>Father</th><th>Class</th><th>Monthly</th><th>Outstanding</th><th>Status</th><th style={{ textAlign: 'right' }}>Action</th></tr></thead>
+                <tbody>
+                  {rows.length === 0 ? (
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 20, color: 'var(--text-secondary)' }}>No children enrolled under this parent.</td></tr>
+                  ) : rows.map(({ s, due }) => (
+                    <tr key={s.id} style={{ background: due > 0 ? '#fff7f7' : '#f6fdf9' }}>
+                      <td>
+                        <div className="font-medium">{s.name}</div>
+                        <div className="text-xs text-secondary-color">ID {s.id} · Adm {s.roll_no || '-'}</div>
+                      </td>
+                      <td className="text-sm">{getParent(s.parent_id)?.father_name || '-'}</td>
+                      <td className="text-sm">{getClass(s.class_id)?.class_name || '-'}{getSection(s.section_id)?.section_name ? ` (${getSection(s.section_id)?.section_name})` : ''}</td>
+                      <td className="text-sm">Rs. {Number(s.monthly_fee || 0).toLocaleString()}</td>
+                      <td>{due > 0 ? <span className="text-danger font-bold">Rs. {due.toLocaleString()}</span> : <span style={{ color: 'var(--success)' }}>—</span>}</td>
+                      <td>
+                        <span className={`badge ${due > 0 ? 'badge-danger' : 'badge-success'}`}>{due > 0 ? 'Pending' : 'Clear'}</span>
+                        {s.status !== 'Active' && <span className="badge" style={{ marginLeft: 4, background: '#e2e8f0', color: '#475569' }}>{s.status}</span>}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <button onClick={() => { setHistoryStudent(s); const d = new Date(); d.setMonth(d.getMonth() - 5); setHistFromMonth(format(d, 'yyyy-MM')); setHistToMonth(curMonth); }} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
+                            <History size={13} /> History
+                          </button>
+                          <button onClick={() => openPayModal(s)} className="btn btn-primary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
+                            <Receipt size={13} /> Fee Voucher
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+
         {/* Filtered Summary Bar — 2 cards only */}
-        {!loading && filtered.length > 0 && (
+        {!parentFilter && !loading && filtered.length > 0 && (
           <div style={{ display: 'flex', gap: 14, marginBottom: 20 }}>
             <div style={{ flex: 1, background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', borderRadius: 14, padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -655,8 +709,8 @@ export default function Fees() {
           </div>
         )}
 
-        {/* Grouped Students Table */}
-        {loading ? <p style={{ textAlign: 'center', padding: 24 }}>Loading...</p> : Object.entries(grouped).map(([key, g]) => {
+        {/* Grouped Students Table — hidden while a family is selected */}
+        {!parentFilter && (loading ? <p style={{ textAlign: 'center', padding: 24 }}>Loading...</p> : Object.entries(grouped).map(([key, g]) => {
           const isExp = expandedGroups[key] !== false;
           return (
             <div key={key} className="card mb-4" style={{ padding: 0, overflow: 'hidden' }}>
@@ -699,7 +753,7 @@ export default function Fees() {
               )}
             </div>
           );
-        })}
+        }))}
       </div>
 
       {/* Export Modal */}
@@ -719,7 +773,7 @@ export default function Fees() {
       {payStudent && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', padding: '40px 20px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 650, position: 'relative', animation: 'fadeIn 0.3s ease' }}>
-            <button onClick={() => { setPayStudent(null); setFineDesc(''); setFineAmount(''); }} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+            <button onClick={() => { setPayStudent(null); setChargeDesc(''); setChargeAmount(''); }} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
             <h2 className="text-xl font-bold mb-4">Fee Collection & Voucher Generator</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, background: 'var(--bg-primary)', padding: 16, borderRadius: 12, marginBottom: 20 }}>
@@ -737,11 +791,14 @@ export default function Fees() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, marginBottom: 15, background: '#fff7ed', padding: 12, borderRadius: 8, border: '1px dashed #fdba74', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#9a3412', whiteSpace: 'nowrap' }}>Add Fine:</span>
-              <input type="text" value={fineDesc} onChange={e => setFineDesc(e.target.value)} placeholder="Fine Description (e.g. Late fee, Broken chair)" className="form-input" style={{ flex: 1, padding: '8px 12px', fontSize: '0.85rem' }} />
-              <input type="number" value={fineAmount} onChange={e => setFineAmount(e.target.value)} placeholder="Amount" className="form-input" style={{ width: 110, padding: '8px 12px', fontSize: '0.85rem' }} />
-              <button type="button" className="btn btn-primary" onClick={addFine} style={{ whiteSpace: 'nowrap' }}>+ Save Fine</button>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 15, background: '#fff7ed', padding: 12, borderRadius: 8, border: '1px dashed #fdba74', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#9a3412', whiteSpace: 'nowrap' }}>Add Charge:</span>
+              <select value={chargeType} onChange={e => setChargeType(e.target.value)} className="form-select" style={{ width: 150, padding: '8px 12px', fontSize: '0.85rem' }}>
+                {CHARGE_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+              <input type="text" value={chargeDesc} onChange={e => setChargeDesc(e.target.value)} placeholder="Description (optional)" className="form-input" style={{ flex: 1, minWidth: 140, padding: '8px 12px', fontSize: '0.85rem' }} />
+              <input type="number" value={chargeAmount} onChange={e => setChargeAmount(e.target.value)} placeholder="Amount" className="form-input" style={{ width: 110, padding: '8px 12px', fontSize: '0.85rem' }} />
+              <button type="button" className="btn btn-primary" onClick={addCharge} style={{ whiteSpace: 'nowrap' }}>+ Add Charge</button>
             </div>
 
             <div style={{ maxHeight: 350, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 20 }}>
@@ -751,10 +808,10 @@ export default function Fees() {
                 </thead>
                 <tbody>
                   {collectionItems.map((item, idx) => (
-                    <tr key={`${item.month}-${item.type}`}>
-                      <td className="text-sm">{fmtM(item.month)}</td>
+                    <tr key={`${item.charge_id || item.month}-${item.type}-${idx}`}>
+                      <td className="text-sm">{item.isCustom ? <span className="text-secondary-color">One-time</span> : fmtM(item.month)}</td>
                       <td className="text-sm">{item.type}</td>
-                      <td className="text-sm font-medium">Rs. {item.payable}</td>
+                      <td className="text-sm font-medium">Rs. {Number(item.payable).toLocaleString()}</td>
                       <td>
                         <input type="number" className="form-input" style={{ ...inp, width: 100, height: 32 }} value={item.paying} onChange={e => updateItem(idx, e.target.value)} />
                       </td>
@@ -793,15 +850,24 @@ export default function Fees() {
                   <div className="text-xl font-bold" style={{ color: 'var(--danger)' }}>Rs. {(collectionItems.reduce((s, i) => s + Number(i.payable), 0) - collectionItems.filter(i => i.isMarkedPaid).reduce((s, i) => s + Number(i.paying), 0)).toLocaleString()}</div>
                 </div>
               </div>
-              <button type="button" className="btn btn-primary" style={{ padding: '12px 24px' }} onClick={(e) => { 
-                const paidItems = collectionItems.filter(i => i.isMarkedPaid);
-                if (paidItems.length === 0) { alert('Please mark at least one item as Paid'); return; }
-                handlePay(e);
-                handlePrint(payStudent, paidItems);
-                setPayStudent(null); setFineDesc(''); setFineAmount('');
-              }}>
-                <Printer size={18} /> Print & Save Voucher
-              </button>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="button" className="btn btn-secondary" style={{ padding: '12px 18px' }} onClick={() => {
+                  // Print a fee bill of all outstanding dues without recording any payment
+                  handlePrint(payStudent, []);
+                  setPayStudent(null); setChargeDesc(''); setChargeAmount('');
+                }}>
+                  <Printer size={18} /> Generate Voucher (Unpaid)
+                </button>
+                <button type="button" className="btn btn-primary" style={{ padding: '12px 24px' }} onClick={(e) => {
+                  const paidItems = collectionItems.filter(i => i.isMarkedPaid);
+                  if (paidItems.length === 0) { alert('Please mark at least one item as Paid'); return; }
+                  handlePay(e);
+                  handlePrint(payStudent, paidItems);
+                  setPayStudent(null); setChargeDesc(''); setChargeAmount('');
+                }}>
+                  <Printer size={18} /> Print &amp; Save Voucher
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -825,7 +891,7 @@ export default function Fees() {
         const hPaid = historyRecords.reduce((s, f) => s + Number(f.amount_paid || 0), 0);
         const hDue = historyRecords.reduce((s, f) => {
           if (f.isCustom) return s + Number(f.amount || 0);
-          return s + Number(historyStudent.monthly_fee || 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0);
+          return s + Number(f.monthly_fee ?? historyStudent.monthly_fee ?? 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0);
         }, 0);
         const hPending = Math.max(0, hDue - hPaid);
         const paidCount = historyRecords.filter(f => f.status === 'Paid').length;
@@ -895,7 +961,7 @@ export default function Fees() {
                 ) : (
                   <div style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {historyRecords.map((f, idx) => {
-                      const totalDue = f.isCustom ? Number(f.amount || 0) : (Number(historyStudent.monthly_fee || 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0));
+                      const totalDue = f.isCustom ? Number(f.amount || 0) : (Number(f.monthly_fee ?? historyStudent.monthly_fee ?? 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0));
                       const bal = totalDue - Number(f.amount_paid || 0);
                       const pct = totalDue > 0 ? Math.round((Number(f.amount_paid || 0) / totalDue) * 100) : 0;
                       const isPaid = f.status === 'Paid';
@@ -916,7 +982,7 @@ export default function Fees() {
                           {/* Charge breakdown chips */}
                           {!f.isCustom ? (
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                              <span style={{ background: '#e0e7ff', color: '#3730a3', borderRadius: 8, padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700 }}>Monthly: Rs. {Number(historyStudent.monthly_fee||0).toLocaleString()}</span>
+                              <span style={{ background: '#e0e7ff', color: '#3730a3', borderRadius: 8, padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700 }}>Monthly: Rs. {Number(f.monthly_fee ?? historyStudent.monthly_fee ?? 0).toLocaleString()}</span>
                               {Number(f.fine||0) > 0 && <span style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 8, padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700 }}>Fine: Rs. {Number(f.fine).toLocaleString()}</span>}
                               {Number(f.paper_fund||0) > 0 && <span style={{ background: '#fef9c3', color: '#854d0e', borderRadius: 8, padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700 }}>Paper Fund: Rs. {Number(f.paper_fund).toLocaleString()}</span>}
                               {Number(f.other_charges||0) > 0 && <span style={{ background: '#ede9fe', color: '#5b21b6', borderRadius: 8, padding: '3px 10px', fontSize: '0.72rem', fontWeight: 700 }}>Other: Rs. {Number(f.other_charges).toLocaleString()}</span>}
@@ -956,7 +1022,7 @@ export default function Fees() {
         <div className="print-only">
           {/* Report Header */}
           <div style={{ textAlign: 'center', borderBottom: '3px solid #4318FF', paddingBottom: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#4318FF', letterSpacing: '-0.02em' }}>Oxford Grammar School</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#4318FF', letterSpacing: '-0.02em' }}>{getSettings().school_name}</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', marginTop: 4 }}>Fee Report</div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 6, fontSize: 10, color: '#64748b', flexWrap: 'wrap' }}>
               <span>Period: <strong>{fmtM(fromMonth)} – {fmtM(toMonth)}</strong></span>
@@ -1010,7 +1076,7 @@ export default function Fees() {
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#94a3b8', borderTop: '1px solid #e2e8f0', paddingTop: 8 }}>
             <span>Total: {filtered.length} students | Period: {fmtM(fromMonth)} – {fmtM(toMonth)}</span>
             <span>Collected: Rs. {filteredSummary.collected.toLocaleString()} | Pending: Rs. {filteredSummary.pending.toLocaleString()}</span>
-            <span>Oxford Grammar School — Printed: {format(new Date(), 'dd/MM/yyyy hh:mm a')}</span>
+            <span>{getSettings().school_name} — Printed: {format(new Date(), 'dd/MM/yyyy hh:mm a')}</span>
           </div>
         </div>
       )}
@@ -1020,7 +1086,7 @@ export default function Fees() {
         const hPaid = historyRecords.reduce((s, f) => s + Number(f.amount_paid || 0), 0);
         const hDue = historyRecords.reduce((s, f) => {
           if (f.isCustom) return s + Number(f.amount || 0);
-          return s + Number(historyStudent.monthly_fee || 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0);
+          return s + Number(f.monthly_fee ?? historyStudent.monthly_fee ?? 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0);
         }, 0);
         const hPending = Math.max(0, hDue - hPaid);
         const parent = parents.find(p => p.id === historyStudent.parent_id);
@@ -1028,7 +1094,7 @@ export default function Fees() {
         return (
           <div className="print-only" style={{ color: '#000', fontFamily: 'Arial, sans-serif' }}>
             <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: 14, marginBottom: 20 }}>
-              <div style={{ fontSize: 24, fontWeight: 900, color: '#000', letterSpacing: '-0.02em' }}>Oxford Grammar School</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: '#000', letterSpacing: '-0.02em' }}>{getSettings().school_name}</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#000', marginTop: 4, textTransform: 'uppercase' }}>Transaction History Ledger</div>
               <div style={{ marginTop: 6, fontSize: 10, color: '#000' }}>
                 Period: {fmtM(histFromMonth)} – {fmtM(histToMonth)}
@@ -1080,7 +1146,7 @@ export default function Fees() {
                 {historyRecords.length === 0 ? (
                   <tr><td colSpan="6" style={{ padding: 20, textAlign: 'center', color: '#000', border: '1px solid #000' }}>No transactions found in this period.</td></tr>
                 ) : historyRecords.map((f, idx) => {
-                  const totalDue = f.isCustom ? Number(f.amount || 0) : (Number(historyStudent.monthly_fee || 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0));
+                  const totalDue = f.isCustom ? Number(f.amount || 0) : (Number(f.monthly_fee ?? historyStudent.monthly_fee ?? 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0));
                   const paid = Number(f.amount_paid || 0);
                   const arrear = Math.max(0, totalDue - paid);
                   return (
