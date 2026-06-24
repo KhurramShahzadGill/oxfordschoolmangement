@@ -284,7 +284,9 @@ export default function Fees() {
 
   const filtered = students.filter(s => {
     if (s.status !== 'Active') return false;
-    if (s.fee_start_month && toMonth < s.fee_start_month) return false;
+    // NOTE: students whose fee_start_month is later than the viewed month are
+    // kept visible (shown with an "Upcoming" badge) so a newly admitted student
+    // never silently disappears from the Fee page.
     if (filterClass && s.class_id !== filterClass) return false;
     if (filterSection && s.section_id !== filterSection) return false;
     if (studentSearch) {
@@ -732,9 +734,11 @@ export default function Fees() {
                           <td className="text-xs text-secondary-color">{s.id}</td>
                           <td className="font-medium">{s.roll_no}</td>
                           <td><div className="font-medium">{s.name}</div></td>
-                          <td>Rs. {s.monthly_fee}</td>
+                          <td>Rs. {Number(s.monthly_fee || 0).toLocaleString()}</td>
                           <td>{arrTotal > 0 ? <span className="text-danger font-medium">Rs. {arrTotal.toLocaleString()}</span> : '—'}</td>
-                          <td><span className={`badge ${ps.unpaid === 0 ? 'badge-success' : 'badge-danger'}`}>{ps.unpaid === 0 ? 'All Paid' : 'Unpaid'}</span></td>
+                          <td>{s.fee_start_month && s.fee_start_month > toMonth
+                            ? <span className="badge" style={{ background: '#e0e7ff', color: '#4318FF' }}>Fee starts {fmtM(s.fee_start_month)}</span>
+                            : <span className={`badge ${ps.unpaid === 0 ? 'badge-success' : 'badge-danger'}`}>{ps.unpaid === 0 ? 'All Paid' : 'Unpaid'}</span>}</td>
                           <td style={{ textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               <button onClick={() => { setHistoryStudent(s); const d=new Date(); d.setMonth(d.getMonth()-5); setHistFromMonth(format(d,'yyyy-MM')); setHistToMonth(curMonth); }} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>

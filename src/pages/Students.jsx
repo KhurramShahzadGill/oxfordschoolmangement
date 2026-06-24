@@ -226,7 +226,7 @@ export default function Students() {
     const studentData = {
       id: form.id, roll_no: form.roll_no, name: form.name, dob: form.dob,
       gender: form.gender, admission_date: form.admission_date, leaving_date: form.leaving_date,
-      medical_info: form.medical_info, monthly_fee: form.monthly_fee, fee_start_month: form.fee_start_month,
+      medical_info: form.medical_info, monthly_fee: Number(form.monthly_fee) || 0, fee_start_month: form.fee_start_month,
       admission_fee: form.admission_fee, security_fee: form.security_fee, paper_fund: form.paper_fund,
       stationery_fee: form.stationery_fee, other_fee: form.other_fee,
       address: form.address,
