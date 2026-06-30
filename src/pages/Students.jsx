@@ -209,6 +209,16 @@ export default function Students() {
   useEffect(() => { loadData(); }, []);
 
   const handleFormSubmit = async (form) => {
+    // Admission No stays manual, but must be unique across students.
+    const adm = (form.roll_no || '').trim();
+    if (adm) {
+      const dup = students.find(s => (s.roll_no || '').trim().toLowerCase() === adm.toLowerCase() && s.id !== editData?.id);
+      if (dup) {
+        alert(`Admission No "${adm}" is already used by ${dup.name} (Student ID ${dup.id}).\n\nPlease enter a unique Admission No.`);
+        return;
+      }
+    }
+
     const parentData = {
       father_name: form.father_name, father_cnic: form.father_cnic,
       father_occupation: form.father_occupation, father_contact: form.father_contact,

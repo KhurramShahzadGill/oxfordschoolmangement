@@ -144,6 +144,10 @@ CREATE TABLE students (
 CREATE INDEX idx_students_school   ON students (school_id);
 CREATE INDEX idx_students_parent   ON students (parent_id);
 CREATE INDEX idx_students_class    ON students (class_id, section_id);
+-- Admission No stays manual but must be unique within a school (when provided).
+CREATE UNIQUE INDEX uq_students_admission_no
+  ON students (school_id, admission_no)
+  WHERE admission_no IS NOT NULL AND admission_no <> '';
 CREATE TRIGGER trg_students_updated
   BEFORE UPDATE ON students
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

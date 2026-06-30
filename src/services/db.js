@@ -24,6 +24,21 @@ const setStorage = (key, data) => {
   localStorage.setItem(key, JSON.stringify(data));
 };
 
+// ===== Money normalization =====
+// Every amount in the system is kept as a clean whole-rupee NUMBER. This is the
+// single rule that makes an amount show the same in every screen: no text-vs-number
+// mixing, and no floating-point drift (the cause of "500 here, 499 there").
+const money = (v) => Math.round(Number(v) || 0);
+const STUDENT_MONEY = ['monthly_fee', 'admission_fee', 'security_fee', 'paper_fund', 'stationery_fee', 'other_fee'];
+const FEE_MONEY = ['monthly_fee', 'fine', 'paper_fund', 'other_charges', 'amount_paid'];
+const CHARGE_MONEY = ['amount', 'amount_paid'];
+// Return a copy of obj with the listed money keys rounded to whole rupees.
+const normMoney = (obj, keys) => {
+  const o = { ...obj };
+  keys.forEach(k => { if (o[k] !== undefined && o[k] !== '' && o[k] !== null) o[k] = money(o[k]); });
+  return o;
+};
+
 // Seed initial data if empty
 const seedData = () => {
   if (!localStorage.getItem('ogs_classes')) {
@@ -114,6 +129,17 @@ const migrateAdmissionCharges = () => {
   localStorage.setItem('ogs_migrated_admission_v1', '1');
 };
 migrateAdmissionCharges();
+
+// One-time cleanup: round every existing stored amount to a whole-rupee number,
+// so older records (saved as text / with decimals) become consistent everywhere.
+const migrateNormalizeMoney = () => {
+  if (localStorage.getItem('ogs_money_normalized_v1')) return;
+  setStorage('ogs_students', getStorage('ogs_students').map(s => normMoney(s, STUDENT_MONEY)));
+  setStorage('ogs_fees', getStorage('ogs_fees').map(f => normMoney(f, FEE_MONEY)));
+  setStorage('ogs_custom_charges', getStorage('ogs_custom_charges').map(c => normMoney(c, CHARGE_MONEY)));
+  localStorage.setItem('ogs_money_normalized_v1', '1');
+};
+migrateNormalizeMoney();
 
 // Highest student id ever issued — kept so deleted ids are never reused.
 export const peekNextStudentId = () => {
@@ -330,6 +356,7 @@ export const apiStudents = {
   },
   create: async (data) => {
     await delay(100);
+    data = normMoney(data, STUDENT_MONEY);
     const students = getStorage('ogs_students');
 
     // Monotonic ID — never reuses an id from a deleted student (prevents
@@ -346,6 +373,7 @@ export const apiStudents = {
   },
   update: async (id, data) => {
     await delay(100);
+    data = normMoney(data, STUDENT_MONEY);
     const students = getStorage('ogs_students');
     const index = students.findIndex(s => s.id === id);
     if (index > -1) {
@@ -417,6 +445,7 @@ export const apiFees = {
   },
   create: async (data) => {
     await delay(100);
+    data = normMoney(data, FEE_MONEY);
     const fees = getStorage('ogs_fees');
     const newFee = { id: uuidv4(), ...data };
     fees.push(newFee);
@@ -425,6 +454,7 @@ export const apiFees = {
   },
   update: async (id, data) => {
     await delay(100);
+    data = normMoney(data, FEE_MONEY);
     const fees = getStorage('ogs_fees');
     const index = fees.findIndex(f => f.id === id);
     if (index > -1) {
@@ -478,6 +508,7 @@ export const apiCustomCharges = {
   },
   create: async (data) => {
     await delay(100);
+    data = normMoney(data, CHARGE_MONEY);
     const charges = getStorage('ogs_custom_charges');
     const newCharge = { id: uuidv4(), date_created: new Date().toISOString().split('T')[0], ...data };
     charges.push(newCharge);
@@ -486,6 +517,7 @@ export const apiCustomCharges = {
   },
   update: async (id, data) => {
     await delay(100);
+    data = normMoney(data, CHARGE_MONEY);
     const charges = getStorage('ogs_custom_charges');
     const index = charges.findIndex(c => c.id === id);
     if (index > -1) {
