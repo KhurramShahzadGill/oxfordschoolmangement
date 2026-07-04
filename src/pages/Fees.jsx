@@ -462,7 +462,7 @@ export default function Fees() {
     loadData();
   };
 
-  const handlePrint = (student, items) => {
+  const handlePrint = (student, items, infoOnly = false) => {
     const monthlyItems = items.filter(i => !i.isCustom);
     const months = [...new Set(monthlyItems.map(i => i.month))];
     const primaryMonth = months[months.length - 1] || curMonth;
@@ -503,7 +503,7 @@ export default function Fees() {
       breakdown: items
     };
 
-    setPrintData({ student, fee: feeData, arrears: allUnpaid, month: primaryMonth });
+    setPrintData({ student, fee: feeData, arrears: allUnpaid, month: primaryMonth, infoOnly });
     setTimeout(() => window.print(), 300);
     setTimeout(() => setPrintData(null), 1000);
   };
@@ -673,7 +673,7 @@ export default function Fees() {
                             <History size={13} /> History
                           </button>
                           <button onClick={() => openPayModal(s)} className="btn btn-primary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
-                            <Receipt size={13} /> Fee Voucher
+                            <Receipt size={13} /> Fee Receipt
                           </button>
                         </div>
                       </td>
@@ -745,7 +745,7 @@ export default function Fees() {
                                 <History size={13} /> History
                               </button>
                               <button onClick={() => openPayModal(s)} className="btn btn-primary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
-                                <Receipt size={13} /> Fee Voucher
+                                <Receipt size={13} /> Fee Receipt
                               </button>
                             </div>
                           </td>
@@ -778,7 +778,7 @@ export default function Fees() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', padding: '40px 20px' }}>
           <div className="card" style={{ width: '100%', maxWidth: 650, position: 'relative', animation: 'fadeIn 0.3s ease' }}>
             <button onClick={() => { setPayStudent(null); setChargeDesc(''); setChargeAmount(''); }} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
-            <h2 className="text-xl font-bold mb-4">Fee Collection & Voucher Generator</h2>
+            <h2 className="text-xl font-bold mb-4">Fee Collection & Receipt Generator</h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, background: 'var(--bg-primary)', padding: 16, borderRadius: 12, marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -856,11 +856,11 @@ export default function Fees() {
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button type="button" className="btn btn-secondary" style={{ padding: '12px 18px' }} onClick={() => {
-                  // Print a fee bill of all outstanding dues without recording any payment
-                  handlePrint(payStudent, []);
+                  // Print an information copy of all outstanding dues without recording any payment
+                  handlePrint(payStudent, [], true);
                   setPayStudent(null); setChargeDesc(''); setChargeAmount('');
                 }}>
-                  <Printer size={18} /> Generate Voucher (Unpaid)
+                  <Printer size={18} /> Generate Receipt (Information)
                 </button>
                 <button type="button" className="btn btn-primary" style={{ padding: '12px 24px' }} onClick={(e) => {
                   const paidItems = collectionItems.filter(i => i.isMarkedPaid);
@@ -869,7 +869,7 @@ export default function Fees() {
                   handlePrint(payStudent, paidItems);
                   setPayStudent(null); setChargeDesc(''); setChargeAmount('');
                 }}>
-                  <Printer size={18} /> Print &amp; Save Voucher
+                  <Printer size={18} /> Print &amp; Save Receipt
                 </button>
               </div>
             </div>
@@ -887,6 +887,7 @@ export default function Fees() {
           className={getClass(printData.student.class_id)?.class_name}
           sectionName={getSection(printData.student.section_id)?.section_name}
           breakdown={printData.fee.breakdown}
+          infoOnly={printData.infoOnly}
         />
       )}
 

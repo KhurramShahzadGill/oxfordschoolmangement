@@ -40,7 +40,7 @@ export default function Settings() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h1 className="text-2xl font-bold">School Settings</h1>
-          <p className="text-sm text-secondary-color mt-1">This information appears on fee vouchers, ID cards, reports and the login screen.</p>
+          <p className="text-sm text-secondary-color mt-1">This information appears on fee receipts, ID cards, reports and the login screen.</p>
         </div>
       </div>
 

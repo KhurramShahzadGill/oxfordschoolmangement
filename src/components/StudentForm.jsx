@@ -172,7 +172,7 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
 
         {/* Admission / One-Time Charges Section */}
         <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Admission / One-Time Charges</h3>
-        {!isEdit && <p className="text-xs text-secondary-color mb-2">Any amount entered here becomes a one-time due in the Fee Voucher (collectible &amp; tracked in history).</p>}
+        {!isEdit && <p className="text-xs text-secondary-color mb-2">Any amount entered here becomes a one-time due in the Fee Receipt (collectible &amp; tracked in history).</p>}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="form-group">
             <label className="form-label">Admission Fee (Rs.)</label>

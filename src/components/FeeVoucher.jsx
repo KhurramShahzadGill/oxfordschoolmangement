@@ -36,7 +36,7 @@ const C = {
   light: '#f1f5f9',
 };
 
-function VoucherTemplate({ student, fee, arrears, parent, className, sectionName, breakdown, copyLabel }) {
+function VoucherTemplate({ student, fee, arrears, parent, className, sectionName, breakdown, copyLabel, infoOnly }) {
   const SCHOOL = getSettings();
   const receivedTotal = Number(fee?.amount_paid || 0);
 
@@ -90,7 +90,7 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ display: 'inline-block', border: '1px solid ' + C.ink, borderRadius: '4px', padding: '2px 8px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copyLabel}</div>
-          <div style={{ marginTop: '3px', fontSize: '11px', fontWeight: 800 }}>FEE VOUCHER</div>
+          <div style={{ marginTop: '3px', fontSize: '11px', fontWeight: 800 }}>{infoOnly ? 'FEE RECEIPT (INFORMATION COPY)' : 'FEE RECEIPT'}</div>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '6px', tableLayout: 'fixed' }}>
         <tbody>
           <tr>
-            <InfoCell label="Voucher No." value={challanNo} />
+            <InfoCell label="Receipt No." value={challanNo} />
             <InfoCell label="Issue Date" value={issueDate} />
             <InfoCell label="Fee Period" value={period} />
           </tr>
@@ -173,24 +173,30 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
 
       {/* Summary + Amount in words */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginTop: '6px', flexShrink: 0 }}>
-        <div style={{ flex: 1, fontSize: '9px', border: '1px dashed ' + C.muted, borderRadius: '4px', padding: '4px 8px', alignSelf: 'stretch' }}>
-          <span style={{ color: C.muted, fontWeight: 700 }}>Received in words: </span>
-          <span style={{ fontWeight: 800 }}>Rupees {numberToWords(receivedTotal)} Only</span>
-        </div>
+        {!infoOnly && (
+          <div style={{ flex: 1, fontSize: '9px', border: '1px dashed ' + C.muted, borderRadius: '4px', padding: '4px 8px', alignSelf: 'stretch' }}>
+            <span style={{ color: C.muted, fontWeight: 700 }}>Received in words: </span>
+            <span style={{ fontWeight: 800 }}>Rupees {numberToWords(receivedTotal)} Only</span>
+          </div>
+        )}
         <table style={{ width: '230px', borderCollapse: 'collapse', flexShrink: 0 }}>
           <tbody>
-            <tr>
-              <td style={{ ...cell, textAlign: 'right', fontWeight: 700 }}>Total Payable</td>
-              <td style={{ ...cell, textAlign: 'right', fontWeight: 800, width: '95px' }}>{grandTotalPayable.toLocaleString()}</td>
+            <tr style={infoOnly ? { background: C.ink } : undefined}>
+              <td style={{ ...cell, textAlign: 'right', fontWeight: infoOnly ? 900 : 700, color: infoOnly ? '#fff' : C.ink, fontSize: infoOnly ? '11px' : '10px' }}>Total Payable</td>
+              <td style={{ ...cell, textAlign: 'right', fontWeight: infoOnly ? 900 : 800, color: infoOnly ? '#fff' : C.ink, width: '95px', fontSize: infoOnly ? '12px' : '10px' }}>{grandTotalPayable.toLocaleString()}</td>
             </tr>
-            <tr>
-              <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: '#059669' }}>Amount Received</td>
-              <td style={{ ...cell, textAlign: 'right', fontWeight: 800, color: '#059669' }}>{receivedTotal.toLocaleString()}</td>
-            </tr>
-            <tr style={{ background: C.ink }}>
-              <td style={{ ...cell, textAlign: 'right', fontWeight: 900, color: '#fff', fontSize: '11px' }}>BALANCE DUE</td>
-              <td style={{ ...cell, textAlign: 'right', fontWeight: 900, color: '#fff', fontSize: '12px' }}>{balance.toLocaleString()}</td>
-            </tr>
+            {!infoOnly && (
+              <tr>
+                <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: '#059669' }}>Amount Received</td>
+                <td style={{ ...cell, textAlign: 'right', fontWeight: 800, color: '#059669' }}>{receivedTotal.toLocaleString()}</td>
+              </tr>
+            )}
+            {!infoOnly && (
+              <tr style={{ background: C.ink }}>
+                <td style={{ ...cell, textAlign: 'right', fontWeight: 900, color: '#fff', fontSize: '11px' }}>BALANCE DUE</td>
+                <td style={{ ...cell, textAlign: 'right', fontWeight: 900, color: '#fff', fontSize: '12px' }}>{balance.toLocaleString()}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -198,18 +204,32 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
       {/* Footer */}
       <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingTop: '10px' }}>
         <div style={{ fontSize: '8px', color: C.muted, maxWidth: '250px', lineHeight: 1.4 }}>
-          <strong>Note:</strong> Computer-generated voucher. Please keep for your records and report any discrepancy within 3 days.
+          <strong>Note:</strong> {infoOnly
+            ? 'Computer-generated information copy of outstanding dues. Not a payment receipt.'
+            : 'Computer-generated receipt. Please keep for your records and report any discrepancy within 3 days.'}
         </div>
-        <div style={{ display: 'flex', gap: '24px', textAlign: 'center' }}>
-          <div style={{ minWidth: '90px', borderTop: '1px solid ' + C.muted, paddingTop: '3px', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase' }}>Cashier Sign</div>
-          <div style={{ minWidth: '90px', borderTop: '1px solid ' + C.muted, paddingTop: '3px', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase' }}>School Stamp</div>
-        </div>
+        {!infoOnly && (
+          <div style={{ display: 'flex', gap: '24px', textAlign: 'center' }}>
+            <div style={{ minWidth: '90px', borderTop: '1px solid ' + C.muted, paddingTop: '3px', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase' }}>Cashier Sign</div>
+            <div style={{ minWidth: '90px', borderTop: '1px solid ' + C.muted, paddingTop: '3px', fontSize: '8px', fontWeight: 800, textTransform: 'uppercase' }}>School Stamp</div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default function FeeVoucher(props) {
+export default function FeeVoucher({ infoOnly, ...props }) {
+  // Information copy (for an unpaid print): a SINGLE Parent copy only — no school
+  // copy, no cashier sign / stamp, and no received/balance figures. Meant to be
+  // sent home to inform parents of dues.
+  if (infoOnly) {
+    return (
+      <div className="print-only voucher-print" style={{ height: '100%' }}>
+        <VoucherTemplate {...props} copyLabel="PARENT COPY" infoOnly />
+      </div>
+    );
+  }
   return (
     <div className="print-only voucher-print" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ height: '49%' }}>
