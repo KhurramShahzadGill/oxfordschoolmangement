@@ -282,6 +282,15 @@ export default function Fees() {
     return { paid, unpaid, paidAmt, unpaidAmt };
   };
 
+  // Advance: the latest FUTURE month (after this month) that is already fully paid.
+  // Lets the list show "Advance till <month>" for students who paid ahead.
+  const advancePaidTill = (student) => {
+    const paidFuture = fees
+      .filter(f => f.student_id === student.id && f.month > curMonth && Number(f.amount_paid || 0) >= monthDue(student, f))
+      .map(f => f.month);
+    return paidFuture.length ? paidFuture.sort().slice(-1)[0] : null;
+  };
+
   const filtered = students.filter(s => {
     if (s.status !== 'Active') return false;
     // NOTE: students whose fee_start_month is later than the viewed month are
@@ -386,6 +395,19 @@ export default function Fees() {
     await loadData();
     setCollectionItems(prev => [...prev, { charge_id: created.id, month: 'N/A', type: title, payable: amount, paying: amount, isMarkedPaid: true, isCustom: true }]);
     setChargeDesc(''); setChargeAmount('');
+  };
+
+  // Advance fee: add the NEXT month (after the latest month already listed) as a
+  // payable line so parents can pay ahead. It records as that month being paid.
+  const addAdvanceMonth = () => {
+    if (!payStudent) return;
+    const monthlyMonths = collectionItems.filter(i => !i.isCustom && i.month && i.month !== 'N/A').map(i => i.month);
+    const base = monthlyMonths.length ? monthlyMonths.slice().sort().slice(-1)[0] : curMonth;
+    const next = nextMonth(base);
+    const existing = getFee(payStudent.id, next);
+    const remaining = Math.max(0, monthDue(payStudent, existing) - Number(existing?.amount_paid || 0));
+    if (remaining <= 0) { alert(`${fmtM(next)} fee is already fully paid.`); return; }
+    setCollectionItems(prev => [...prev, { month: next, type: 'Monthly Fee', payable: remaining, paying: remaining, isMarkedPaid: true, isCustom: false }]);
   };
 
   const handlePay = async (e) => {
@@ -729,6 +751,7 @@ export default function Fees() {
                     {g.students.map(s => {
                       const ps = getPeriodStatus(s);
                       const arrTotal = getArrearsAmount(s);
+                      const adv = advancePaidTill(s);
                       return (
                         <tr key={s.id}>
                           <td className="text-xs text-secondary-color">{s.id}</td>
@@ -738,7 +761,8 @@ export default function Fees() {
                           <td>{arrTotal > 0 ? <span className="text-danger font-medium">Rs. {arrTotal.toLocaleString()}</span> : '—'}</td>
                           <td>{s.fee_start_month && s.fee_start_month > toMonth
                             ? <span className="badge" style={{ background: '#e0e7ff', color: '#4318FF' }}>Fee starts {fmtM(s.fee_start_month)}</span>
-                            : <span className={`badge ${ps.unpaid === 0 ? 'badge-success' : 'badge-danger'}`}>{ps.unpaid === 0 ? 'All Paid' : 'Unpaid'}</span>}</td>
+                            : <span className={`badge ${ps.unpaid === 0 ? 'badge-success' : 'badge-danger'}`}>{ps.unpaid === 0 ? 'All Paid' : 'Unpaid'}</span>}
+                            {adv && <span className="badge" style={{ marginLeft: 4, background: '#dcfce7', color: '#15803d' }}>Advance till {fmtM(adv)}</span>}</td>
                           <td style={{ textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               <button onClick={() => { setHistoryStudent(s); const d=new Date(); d.setMonth(d.getMonth()-5); setHistFromMonth(format(d,'yyyy-MM')); setHistToMonth(curMonth); }} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
@@ -803,6 +827,12 @@ export default function Fees() {
               <input type="text" value={chargeDesc} onChange={e => setChargeDesc(e.target.value)} placeholder="Description (optional)" className="form-input" style={{ flex: 1, minWidth: 140, padding: '8px 12px', fontSize: '0.85rem' }} />
               <input type="number" value={chargeAmount} onChange={e => setChargeAmount(e.target.value)} placeholder="Amount" className="form-input" style={{ width: 110, padding: '8px 12px', fontSize: '0.85rem' }} />
               <button type="button" className="btn btn-primary" onClick={addCharge} style={{ whiteSpace: 'nowrap' }}>+ Add Charge</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 15, background: '#eef2ff', padding: 12, borderRadius: 8, border: '1px dashed #a5b4fc', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#3730a3', whiteSpace: 'nowrap' }}>Advance Fee:</span>
+              <button type="button" className="btn btn-secondary" onClick={addAdvanceMonth} style={{ whiteSpace: 'nowrap' }}>+ Collect Next Month</button>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Adds the next month so parents can pay ahead. Click again for more months.</span>
             </div>
 
             <div style={{ maxHeight: 350, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 20 }}>
