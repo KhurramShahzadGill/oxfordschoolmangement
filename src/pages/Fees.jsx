@@ -3,7 +3,6 @@ import { apiFees, apiStudents, apiParents, apiClasses, apiSections, apiCustomCha
 import { X, ChevronDown, ChevronRight, Receipt, Printer, History, FileSpreadsheet } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import FeeVoucher from '../components/FeeVoucher';
-import ParentSearch from '../components/ParentSearch';
 import * as XLSX from 'xlsx';
 
 const fmtM = (m) => { try { return format(parseISO(m + '-01'), 'MMM yyyy'); } catch { return m; } };
@@ -300,7 +299,10 @@ export default function Fees() {
     if (filterSection && s.section_id !== filterSection) return false;
     if (studentSearch) {
       const q = studentSearch.toLowerCase();
-      if (!(s.id?.toLowerCase().includes(q) || s.roll_no?.toLowerCase().includes(q) || s.name?.toLowerCase().includes(q))) return false;
+      const p = getParent(s.parent_id);
+      const hit = s.id?.toLowerCase().includes(q) || s.roll_no?.toLowerCase().includes(q) || s.name?.toLowerCase().includes(q)
+        || p?.father_name?.toLowerCase().includes(q) || p?.mother_name?.toLowerCase().includes(q);
+      if (!hit) return false;
     }
     if (parentFilter && s.parent_id !== parentFilter.id) return false;
     if (filterStatus) {
@@ -634,17 +636,7 @@ export default function Fees() {
             </select>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <input className="form-input" style={{ flex: 1, minWidth: 200, ...inp }} placeholder="Student ID, Admission No, Name..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
-            <div style={{ flex: 1, minWidth: 240 }}>
-              <ParentSearch
-                parents={parents}
-                students={students}
-                selected={parentFilter}
-                onSelect={setParentFilter}
-                onClear={() => setParentFilter(null)}
-                placeholder="Search Parent OR any Child name — see the whole family..."
-              />
-            </div>
+            <input className="form-input" style={{ flex: 1, minWidth: 260, ...inp }} placeholder="Search by Student ID, Admission No, Student Name or Parent Name..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
           </div>
         </div>
 

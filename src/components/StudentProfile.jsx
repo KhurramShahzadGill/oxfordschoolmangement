@@ -294,13 +294,15 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
 
       {/* Print Only: Student ID Card */}
       {printCard && (
-        <div className="print-only" style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
-          <StudentCard 
-            student={student} 
-            parent={parent} 
-            className={cls?.class_name} 
-            sectionName={curSec?.section_name} 
-          />
+        <div className="print-only id-card-print">
+          <div className="id-card-sheet">
+            <StudentCard
+              student={student}
+              parent={parent}
+              className={cls?.class_name}
+              sectionName={curSec?.section_name}
+            />
+          </div>
         </div>
       )}
 

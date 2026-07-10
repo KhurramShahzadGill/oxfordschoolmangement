@@ -420,6 +420,24 @@ body {
     page-break-after: always;
   }
 
+  /* ── Student ID Card printing: each card prints on its own card-sized page ── */
+  @page cardpage { size: 110mm 72mm; margin: 0; }
+  .id-card-print .id-card-sheet {
+    page: cardpage;
+    width: 110mm;
+    height: 72mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+  .id-card-print .id-card-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
   /* Long documents (student profile / ID card): un-clip the app shell and
      isolate the print block so all content flows across full A4 pages. */
   body.print-mode #root,

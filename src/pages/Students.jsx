@@ -4,7 +4,7 @@ import { Plus, Edit2, Trash2, Search as SearchIcon, Eye, FileSpreadsheet, Printe
 import { differenceInYears, parseISO, format } from 'date-fns';
 import StudentForm from '../components/StudentForm';
 import StudentProfile from '../components/StudentProfile';
-import ParentSearch from '../components/ParentSearch';
+import StudentCard from '../components/StudentCard';
 import * as XLSX from 'xlsx';
 
 /* ───────── Column Groups for Export Modal ───────── */
@@ -178,7 +178,7 @@ export default function Students() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [parentFilter, setParentFilter] = useState(null);
+  const [printCards, setPrintCards] = useState(false);
   const [filterClass, setFilterClass] = useState('');
   const [filterSection, setFilterSection] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -308,9 +308,11 @@ export default function Students() {
     if (filterStatus && s.status !== filterStatus) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      if (!(s.name?.toLowerCase().includes(q) || s.id?.toLowerCase().includes(q) || s.roll_no?.toLowerCase().includes(q))) return false;
+      const p = parents.find(pr => pr.id === s.parent_id);
+      const hit = s.name?.toLowerCase().includes(q) || s.id?.toLowerCase().includes(q) || s.roll_no?.toLowerCase().includes(q)
+        || p?.father_name?.toLowerCase().includes(q) || p?.mother_name?.toLowerCase().includes(q);
+      if (!hit) return false;
     }
-    if (parentFilter && s.parent_id !== parentFilter.id) return false;
     if (ageFrom || ageTo) {
       if (!s.dob) return false;
       let age = 0;
@@ -388,6 +390,15 @@ export default function Students() {
     setTimeout(() => setPrintStudentList(false), 800);
   };
 
+  // Bulk-print ID cards for the currently filtered students (one card per page).
+  const handlePrintCards = () => {
+    if (filtered.length === 0) { alert('No students to print. Adjust the filters first.'); return; }
+    setPrintCards(true);
+    document.body.classList.add('print-mode');
+    setTimeout(() => window.print(), 250);
+    setTimeout(() => { setPrintCards(false); document.body.classList.remove('print-mode'); }, 1000);
+  };
+
   const thStyle = { padding: '7px 8px', textAlign: 'left', fontWeight: 700, fontSize: 10, letterSpacing: '0.03em', whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,0.15)' };
   const tdStyle = { padding: '5px 8px', fontSize: 10, wordBreak: 'break-word', overflowWrap: 'break-word', borderRight: '1px solid #e2e8f0', verticalAlign: 'top', lineHeight: 1.4 };
 
@@ -397,6 +408,13 @@ export default function Students() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <h1 className="text-2xl font-bold">Student Management</h1>
           <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={handlePrintCards}
+              title="Print ID cards for the filtered students"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-secondary)', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
+            >
+              <Printer size={15} /> ID Cards ({filtered.length})
+            </button>
             {/* Single Export button opens the modal */}
             <button
               onClick={() => setShowExportModal(true)}
@@ -427,21 +445,13 @@ export default function Students() {
 
         {/* Search & Filters */}
         <div className="card mb-6" style={{ padding: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ marginBottom: '16px' }}>
             <div style={{ position: 'relative' }}>
               <SearchIcon size={18} style={{ position: 'absolute', left: 14, top: 10, color: 'var(--text-secondary)' }} />
               <input className="form-input" style={{ paddingLeft: 42, width: '100%', padding: '10px 14px 10px 42px' }}
-                placeholder="Search by Student ID, Admission No, or Name..."
+                placeholder="Search by Student ID, Admission No, Student Name or Parent Name..."
                 value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
-            <ParentSearch
-              parents={parents}
-              students={students}
-              selected={parentFilter}
-              onSelect={setParentFilter}
-              onClear={() => setParentFilter(null)}
-              placeholder="Search Parent or any Child name to see the whole family..."
-            />
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -552,6 +562,22 @@ export default function Students() {
         onExcel={handleExportExcel}
         filterSummary={filterSummaryText}
       />
+
+      {/* PRINT-ONLY: Bulk Student ID Cards — one card-sized page each */}
+      {printCards && (
+        <div className="print-only id-card-print">
+          {filtered.map(s => (
+            <div className="id-card-sheet" key={s.id}>
+              <StudentCard
+                student={s}
+                parent={parents.find(pr => pr.id === s.parent_id)}
+                className={classes.find(c => c.id === s.class_id)?.class_name}
+                sectionName={sections.find(sec => sec.id === s.section_id)?.section_name}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════
           PRINT-ONLY: Professional Student List
