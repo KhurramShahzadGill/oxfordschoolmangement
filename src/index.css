@@ -1,5 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* Number inputs: remove the up/down spinner arrows everywhere so amounts are
+   typed directly from the keyboard (no accidental increment/decrement). */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 :root {
   /* Colors */
   --bg-primary: #f4f7fe;
