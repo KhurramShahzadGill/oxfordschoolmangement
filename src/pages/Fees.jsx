@@ -799,28 +799,29 @@ export default function Fees() {
 
       {/* Advanced Collection Modal */}
       {payStudent && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', padding: '40px 20px' }}>
-          <div className="card" style={{ width: '100%', maxWidth: 650, position: 'relative', animation: 'fadeIn 0.3s ease' }}>
-            <button onClick={() => { setPayStudent(null); setChargeDesc(''); setChargeAmount(''); }} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
-            <h2 className="text-xl font-bold mb-4">Fee Collection & Receipt Generator</h2>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+          <div style={{ width: '100%', maxWidth: 680, maxHeight: '92vh', background: 'var(--bg-secondary)', borderRadius: 18, boxShadow: '0 24px 60px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.25s ease' }}>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, background: 'var(--bg-primary)', padding: 16, borderRadius: 12, marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {payStudent.picture && <img src={payStudent.picture} style={{ width: 50, height: 50, borderRadius: 8, objectFit: 'cover' }} />}
-                <div>
-                  <div className="font-bold text-lg">{payStudent.name}</div>
-                  <div className="text-xs text-secondary-color">Father: {getParent(payStudent.parent_id)?.father_name || '-'}</div>
-                  <div className="text-xs text-secondary-color">ID: {payStudent.id} | Admission No: {payStudent.roll_no}</div>
+            {/* Header (fixed) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 22px', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                {payStudent.picture
+                  ? <img src={payStudent.picture} style={{ width: 46, height: 46, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                  : <div style={{ width: 46, height: 46, borderRadius: 10, background: 'var(--primary)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 18, flexShrink: 0 }}>{payStudent.name?.charAt(0)}</div>}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>{payStudent.name}</div>
+                  <div className="text-xs text-secondary-color" style={{ marginTop: 2 }}>{getClass(payStudent.class_id)?.class_name || '-'}{getSection(payStudent.section_id)?.section_name ? ` · ${getSection(payStudent.section_id)?.section_name}` : ''} · ID {payStudent.id} · Adm {payStudent.roll_no || '-'}</div>
+                  <div className="text-xs text-secondary-color">Father: {getParent(payStudent.parent_id)?.father_name || '-'} · Monthly Rs. {Number(payStudent.monthly_fee || 0).toLocaleString()}</div>
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="text-sm font-semibold">{getClass(payStudent.class_id)?.class_name} - {getSection(payStudent.section_id)?.section_name}</div>
-                <div className="text-xs text-secondary-color">Monthly Fee: Rs. {payStudent.monthly_fee}</div>
-              </div>
+              <button onClick={() => { setPayStudent(null); setChargeDesc(''); setChargeAmount(''); }} style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 8, padding: 7, cursor: 'pointer', display: 'flex', color: 'var(--text-secondary)', flexShrink: 0 }}><X size={18} /></button>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, marginBottom: 15, background: '#fff7ed', padding: 12, borderRadius: 8, border: '1px dashed #fdba74', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#9a3412', whiteSpace: 'nowrap' }}>Add Charge:</span>
+            {/* Body (single scroll) */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 22px' }}>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, background: 'var(--bg-primary)', padding: 12, borderRadius: 10, border: '1px solid var(--border-color)', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Add Charge:</span>
               <select value={chargeType} onChange={e => setChargeType(e.target.value)} className="form-select" style={{ width: 150, padding: '8px 12px', fontSize: '0.85rem' }}>
                 {CHARGE_HEADS.map(h => <option key={h} value={h}>{h}</option>)}
               </select>
@@ -829,18 +830,22 @@ export default function Fees() {
               <button type="button" className="btn btn-primary" onClick={addCharge} style={{ whiteSpace: 'nowrap' }}>+ Add Charge</button>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, marginBottom: 15, background: '#eef2ff', padding: 12, borderRadius: 8, border: '1px dashed #a5b4fc', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#3730a3', whiteSpace: 'nowrap' }}>Advance Fee:</span>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, background: '#f5f3ff', padding: 12, borderRadius: 10, border: '1px solid #ddd6fe', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#5b21b6', whiteSpace: 'nowrap' }}>Advance Fee:</span>
               <button type="button" className="btn btn-secondary" onClick={addAdvanceMonth} style={{ whiteSpace: 'nowrap' }}>+ Collect Next Month</button>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Adds the next month so parents can pay ahead. Click again for more months.</span>
             </div>
 
-            <div style={{ maxHeight: 350, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 8, marginBottom: 20 }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', marginBottom: 8 }}>Payable Items</div>
+            <div style={{ border: '1px solid var(--border-color)', borderRadius: 10, overflow: 'hidden' }}>
               <table className="data-table" style={{ margin: 0 }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
-                  <tr><th>Month</th><th>Description</th><th>Payable</th><th>Amount Paying</th><th style={{ textAlign: 'center' }}>Action</th></tr>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-primary)', zIndex: 1 }}>
+                  <tr><th>Month</th><th>Description</th><th>Payable</th><th>Amount Paying</th><th style={{ textAlign: 'center' }}>Status</th></tr>
                 </thead>
                 <tbody>
+                  {collectionItems.length === 0 && (
+                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: 22, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>No dues in this period. Use “Add Charge” or “Collect Next Month” above.</td></tr>
+                  )}
                   {collectionItems.map((item, idx) => (
                     <tr key={`${item.charge_id || item.month}-${item.type}-${idx}`}>
                       <td className="text-sm">{item.isCustom ? <span className="text-secondary-color">One-time</span> : fmtM(item.month)}</td>
@@ -868,9 +873,10 @@ export default function Fees() {
                 </tbody>
               </table>
             </div>
+            </div>
 
-            <div style={{ background: 'var(--bg-primary)', padding: '20px', borderRadius: 12, border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 32 }}>
+            <div style={{ flexShrink: 0, borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)', padding: '14px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                 <div>
                   <div className="text-xs uppercase font-bold tracking-wider" style={{ color: '#64748b' }}>Total Payable</div>
                   <div className="text-xl font-bold">Rs. {collectionItems.reduce((s, i) => s + Number(i.payable), 0).toLocaleString()}</div>
@@ -933,11 +939,11 @@ export default function Fees() {
         const partialCount = historyRecords.filter(f => f.status === 'Partial').length;
         const unpaidCount = historyRecords.filter(f => !f.status || f.status === 'Unpaid').length;
         return (
-          <div className="no-print" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 200, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', padding: '30px 16px', backdropFilter: 'blur(4px)' }}>
-            <div style={{ width: '100%', maxWidth: 780, borderRadius: 20, overflow: 'hidden', boxShadow: '0 25px 60px rgba(0,0,0,0.35)', background: 'var(--bg-secondary)' }}>
+          <div className="no-print" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 200, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+            <div style={{ width: '100%', maxWidth: 780, maxHeight: '92vh', borderRadius: 18, overflow: 'hidden', boxShadow: '0 25px 60px rgba(0,0,0,0.35)', background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column' }}>
 
               {/* Gradient Header */}
-              <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)', padding: '28px 28px 22px', position: 'relative' }}>
+              <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)', padding: '24px 26px 20px', position: 'relative', flexShrink: 0 }}>
                 <button onClick={() => { setPrintHistoryStudent(true); setTimeout(() => window.print(), 200); setTimeout(() => setPrintHistoryStudent(false), 800); }} style={{ position: 'absolute', top: 16, right: 48, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, cursor: 'pointer', padding: '6px 12px', color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}><Printer size={15} /> <span style={{ fontSize: 12, fontWeight: 600 }}>Print Invoice</span></button>
                 <button onClick={() => setHistoryStudent(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, cursor: 'pointer', padding: 6, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -967,8 +973,8 @@ export default function Fees() {
                 </div>
               </div>
 
-              {/* Body */}
-              <div style={{ padding: 24 }}>
+              {/* Body (single scroll) */}
+              <div style={{ padding: 20, flex: 1, overflowY: 'auto' }}>
                 {/* Date Range + status pills */}
                 <div style={{ display: 'flex', gap: 10, marginBottom: 18, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 140 }}>
@@ -994,7 +1000,7 @@ export default function Fees() {
                     <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Try adjusting the date range</div>
                   </div>
                 ) : (
-                  <div style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {historyRecords.map((f, idx) => {
                       const totalDue = f.isCustom ? Number(f.amount || 0) : (Number(f.monthly_fee ?? historyStudent.monthly_fee ?? 0) + Number(f.fine || 0) + Number(f.paper_fund || 0) + Number(f.other_charges || 0));
                       const bal = totalDue - Number(f.amount_paid || 0);
