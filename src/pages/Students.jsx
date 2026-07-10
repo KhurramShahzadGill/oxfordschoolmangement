@@ -563,9 +563,9 @@ export default function Students() {
         filterSummary={filterSummaryText}
       />
 
-      {/* PRINT-ONLY: Bulk Student ID Cards — one card-sized page each */}
+      {/* PRINT-ONLY: Bulk Student ID Cards — packed onto A4 pages */}
       {printCards && (
-        <div className="print-only id-card-print">
+        <div className="print-only id-card-bulk">
           {filtered.map(s => (
             <div className="id-card-sheet" key={s.id}>
               <StudentCard

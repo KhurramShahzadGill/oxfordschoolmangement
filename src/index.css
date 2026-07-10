@@ -420,7 +420,7 @@ body {
     page-break-after: always;
   }
 
-  /* ── Student ID Card printing: each card prints on its own card-sized page ── */
+  /* ── Single Student ID Card: the printed page IS the card size ── */
   @page cardpage { size: 110mm 72mm; margin: 0; }
   .id-card-print .id-card-sheet {
     page: cardpage;
@@ -429,13 +429,28 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    page-break-after: always;
-    break-after: page;
     overflow: hidden;
   }
-  .id-card-print .id-card-sheet:last-child {
-    page-break-after: auto;
-    break-after: auto;
+
+  /* ── Bulk ID Cards: pack as many cards as fit on each A4 page, then flow
+        onto the next page (no blank space, no one-card-per-page). ── */
+  .id-card-bulk {
+    font-size: 0; /* remove inline-block whitespace gaps */
+    text-align: left;
+  }
+  .id-card-bulk .id-card-sheet {
+    display: inline-block;
+    vertical-align: top;
+    width: 86mm;
+    height: 57mm;
+    margin: 3mm;
+    overflow: hidden;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .id-card-bulk .id-card-sheet .id-card-component {
+    transform: scale(0.8);
+    transform-origin: top left;
   }
 
   /* Long documents (student profile / ID card): un-clip the app shell and
