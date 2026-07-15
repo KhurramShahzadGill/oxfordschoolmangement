@@ -10,14 +10,14 @@ import {
   LogOut
 } from 'lucide-react';
 import { getSettings } from '../services/db';
+import { supabase } from '../services/supabase';
 
 export default function Layout() {
   const navigate = useNavigate();
   const settings = getSettings();
 
-  // Mock logout
-  const handleLogout = () => {
-    localStorage.removeItem('auth');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/login');
   };
 

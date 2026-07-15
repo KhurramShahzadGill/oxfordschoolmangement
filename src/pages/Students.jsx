@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, ADMISSION_HEADS } from '../services/db';
+import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, ADMISSION_HEADS } from '../services/db';
 import { Plus, Edit2, Trash2, Eye, FileSpreadsheet, Printer, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { differenceInYears, parseISO, format } from 'date-fns';
 import StudentForm from '../components/StudentForm';
@@ -241,6 +241,9 @@ export default function Students() {
       ({ parent } = await apiParents.createOrGet(parentData));
     }
 
+    // Upload a newly-picked photo to the bucket; keep an existing URL as-is.
+    const pictureUrl = await uploadStudentPhoto(form.picture);
+
     const studentData = {
       id: form.id, roll_no: form.roll_no, name: form.name, dob: form.dob,
       gender: form.gender, admission_date: form.admission_date, leaving_date: form.leaving_date,
@@ -248,7 +251,7 @@ export default function Students() {
       admission_fee: form.admission_fee, security_fee: form.security_fee, paper_fund: form.paper_fund,
       stationery_fee: form.stationery_fee, other_fee: form.other_fee,
       address: form.address,
-      picture: form.picture, status: form.status, parent_id: parent.id, class_id: form.class_id, section_id: form.section_id,
+      picture: pictureUrl, status: form.status, parent_id: parent.id, class_id: form.class_id, section_id: form.section_id,
       important_overrides: form.important_overrides || {},
     };
 

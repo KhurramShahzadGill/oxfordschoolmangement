@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -8,11 +8,26 @@ import Classes from './pages/Classes';
 import Fees from './pages/Fees';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import { supabase } from './services/supabase';
 
-// Mock Auth Guard
+// Auth guard — allows access only when a Supabase session exists.
 const RequireAuth = ({ children }) => {
-  const isAuth = localStorage.getItem('auth') === 'true';
-  if (!isAuth) {
+  const [status, setStatus] = useState('loading'); // 'loading' | 'in' | 'out'
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setStatus(data.session ? 'in' : 'out');
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setStatus(session ? 'in' : 'out');
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (status === 'loading') {
+    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>Loading…</div>;
+  }
+  if (status === 'out') {
     return <Navigate to="/login" replace />;
   }
   return children;

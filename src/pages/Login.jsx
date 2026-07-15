@@ -1,14 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getSettings } from '../services/db';
+import { supabase } from '../services/supabase';
 
 export default function Login() {
   const navigate = useNavigate();
   const settings = getSettings();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    localStorage.setItem('auth', 'true');
+    setError('');
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setLoading(false);
+    if (error) {
+      setError('Email or password is wrong. Please try again.');
+      return;
+    }
     navigate('/');
   };
 
@@ -25,15 +37,22 @@ export default function Login() {
 
         <form onSubmit={handleLogin}>
           <div className="form-group">
-            <label className="form-label">Email / Username</label>
-            <input type="text" className="form-input" placeholder="admin@oxford.edu" required />
+            <label className="form-label">Email</label>
+            <input type="email" className="form-input" placeholder="admin@school.com" required
+              value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" />
           </div>
           <div className="form-group">
             <label className="form-label">Password</label>
-            <input type="password" className="form-input" placeholder="••••••••" required />
+            <input type="password" className="form-input" placeholder="••••••••" required
+              value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
           </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }}>
-            Sign In
+          {error && (
+            <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: '0.82rem', marginBottom: 12 }}>
+              {error}
+            </div>
+          )}
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
       </div>

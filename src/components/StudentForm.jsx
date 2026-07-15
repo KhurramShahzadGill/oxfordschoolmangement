@@ -131,7 +131,7 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="form-group">
             <label className="form-label">Student ID <span className="text-xs text-secondary-color">(Auto Generated)</span></label>
-            <input className="form-input" style={{ ...inputStyle, background: '#f8fafc', fontWeight: 'bold', color: 'var(--primary)' }} disabled value={isEdit ? form.id : nextId} />
+            <input className="form-input" style={{ ...inputStyle, background: '#f8fafc', fontWeight: 'bold', color: 'var(--primary)' }} disabled value={isEdit ? form.id : (nextId || 'Auto')} />
           </div>
           <div className="form-group">
             {impLabel('roll_no', 'Admission Number')}
