@@ -70,6 +70,7 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
       <span>{text}{hint && <span className="text-xs text-secondary-color"> {hint}</span>}</span>
       <button
         type="button"
+        tabIndex={-1}
         onClick={() => toggleImp(key)}
         title={isImp(key) ? 'Important field — click to mark not important for this student' : 'Not important for this student — click to mark important'}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: '0.95rem', color: isImp(key) ? '#f59e0b' : '#cbd5e1' }}
