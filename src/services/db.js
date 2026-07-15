@@ -12,6 +12,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { DEFAULT_IMPORTANT_KEYS } from '../utils/completeness';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -482,6 +483,7 @@ export const defaultSettings = {
   address: 'Chak No. 202/RB, Gatti Faisalabad',
   phone: '0321-6088202',
   logo: '', // base64 data URL; empty falls back to /logo.png
+  important_fields: DEFAULT_IMPORTANT_KEYS, // admission fields flagged important for every student
 };
 export const getSettings = () => {
   try {
@@ -493,6 +495,12 @@ export const getSettings = () => {
 export const saveSettings = (data) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...getSettings(), ...data }));
   return getSettings();
+};
+
+// The global list of admission fields marked important (falls back to defaults).
+export const getImportantFields = () => {
+  const list = getSettings().important_fields;
+  return Array.isArray(list) ? list : DEFAULT_IMPORTANT_KEYS;
 };
 
 // ========== CUSTOM CHARGES API ==========

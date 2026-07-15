@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiParents, apiStudents } from '../services/db';
 import { Edit2, Trash2, Users } from 'lucide-react';
 import { formatCnic, formatMobile, validateCnic, validateMobile } from '../utils/formatters';
-import ParentSearch from '../components/ParentSearch';
+import FamilySearch from '../components/FamilySearch';
 
 export default function Parents() {
   const [parents, setParents] = useState([]);
@@ -89,13 +89,13 @@ export default function Parents() {
 
       {/* Search */}
       <div className="card mb-6">
-        <ParentSearch
+        <FamilySearch
           parents={parents}
           students={allStudents}
           selected={selectedParent}
-          onSelect={handleSelectParent}
+          onSelect={(parent) => parent && handleSelectParent(parent)}
           onClear={() => { setSelectedParent(null); setExpandedParent(null); }}
-          placeholder="Search by Parent or any Child name (or CNIC / Contact / ID)..."
+          placeholder="Search by Student ID, Admission No, Name, Parent CNIC, Phone or Father/Mother Name..."
         />
       </div>
 

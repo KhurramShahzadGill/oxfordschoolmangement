@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, peekNextStudentId, ADMISSION_HEADS } from '../services/db';
-import { Plus, Edit2, Trash2, Search as SearchIcon, Eye, FileSpreadsheet, Printer, X } from 'lucide-react';
+import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, ADMISSION_HEADS } from '../services/db';
+import { Plus, Edit2, Trash2, Eye, FileSpreadsheet, Printer, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { differenceInYears, parseISO, format } from 'date-fns';
 import StudentForm from '../components/StudentForm';
 import StudentProfile from '../components/StudentProfile';
 import StudentCard from '../components/StudentCard';
+import FamilySearch from '../components/FamilySearch';
+import { getMissingFields, ADMISSION_FIELD_GROUPS } from '../utils/completeness';
 import * as XLSX from 'xlsx';
 
 /* ───────── Column Groups for Export Modal ───────── */
@@ -185,6 +187,12 @@ export default function Students() {
   const [ageFrom, setAgeFrom] = useState('');
   const [ageTo, setAgeTo] = useState('');
 
+  // Data completeness (missing-info) states
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+  const [showMissingModal, setShowMissingModal] = useState(false);
+  const [printMissing, setPrintMissing] = useState(false);
+  const [printBlankForm, setPrintBlankForm] = useState(false);
+
   // Export / Print States
   const [printStudentList, setPrintStudentList] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -241,6 +249,7 @@ export default function Students() {
       stationery_fee: form.stationery_fee, other_fee: form.other_fee,
       address: form.address,
       picture: form.picture, status: form.status, parent_id: parent.id, class_id: form.class_id, section_id: form.section_id,
+      important_overrides: form.important_overrides || {},
     };
 
     try {
@@ -324,6 +333,58 @@ export default function Students() {
   });
 
   const filterSections = sections.filter(s => s.class_id === filterClass);
+
+  // Which of the currently-filtered students have missing important fields.
+  // Importance = global default (Settings) merged with each student's overrides.
+  const importantKeys = getImportantFields();
+  const parentOf = (s) => parents.find(p => p.id === s.parent_id);
+  const incompleteRows = filtered
+    .map(s => ({ s, missing: getMissingFields(s, parentOf(s), importantKeys) }))
+    .filter(r => r.missing.length > 0);
+  const incompleteCount = incompleteRows.length;
+  const tableRows = showIncompleteOnly ? incompleteRows.map(r => r.s) : filtered;
+
+  const handlePrintMissing = () => {
+    setShowMissingModal(false);
+    setPrintMissing(true);
+    setTimeout(() => window.print(), 200);
+    setTimeout(() => setPrintMissing(false), 800);
+  };
+
+  // Print a clean, blank admission form to hand out / send home for filling.
+  const handlePrintBlankForm = () => {
+    setPrintBlankForm(true);
+    setTimeout(() => window.print(), 200);
+    setTimeout(() => setPrintBlankForm(false), 800);
+  };
+
+  // Excel export of students with missing important data — includes identity
+  // and contact numbers so the school can reach the families.
+  const handleExportMissingExcel = () => {
+    if (incompleteRows.length === 0) { alert('No missing data — every profile in this view is complete.'); return; }
+    const rows = incompleteRows.map(({ s, missing }) => {
+      const p = parentOf(s);
+      const c = classes.find(cl => cl.id === s.class_id);
+      const sec = sections.find(sc => sc.id === s.section_id);
+      return {
+        'Student ID':      s.id || '',
+        'Admission No':    s.roll_no || '',
+        'Student Name':    s.name || '',
+        'Class':           c?.class_name || '',
+        'Section':         sec?.section_name || '',
+        'Father Name':     p?.father_name || '',
+        'Father Contact':  p?.father_contact || '',
+        'Mother Contact':  p?.mother_contact || '',
+        'Missing Count':   missing.length,
+        'Missing Important Fields': missing.map(m => m.label).join(', '),
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: k === 'Missing Important Fields' ? 45 : Math.max(k.length + 2, 14) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Missing Data');
+    XLSX.writeFile(wb, `Missing_Data_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  };
 
   // Summary stats
   const activeCount = filtered.filter(s => s.status === 'Active').length;
@@ -415,6 +476,14 @@ export default function Students() {
             >
               <Printer size={15} /> ID Cards ({filtered.length})
             </button>
+            {/* Blank admission form to print / send home */}
+            <button
+              onClick={handlePrintBlankForm}
+              title="Print a blank admission form to send home for filling"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-secondary)', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
+            >
+              <Printer size={15} /> Blank Form
+            </button>
             {/* Single Export button opens the modal */}
             <button
               onClick={() => setShowExportModal(true)}
@@ -446,12 +515,15 @@ export default function Students() {
         {/* Search & Filters */}
         <div className="card mb-6" style={{ padding: '20px' }}>
           <div style={{ marginBottom: '16px' }}>
-            <div style={{ position: 'relative' }}>
-              <SearchIcon size={18} style={{ position: 'absolute', left: 14, top: 10, color: 'var(--text-secondary)' }} />
-              <input className="form-input" style={{ paddingLeft: 42, width: '100%', padding: '10px 14px 10px 42px' }}
-                placeholder="Search by Student ID, Admission No, Student Name or Parent Name..."
-                value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-            </div>
+            <FamilySearch
+              students={students}
+              parents={parents}
+              classes={classes}
+              sections={sections}
+              query={searchQuery}
+              onQueryChange={setSearchQuery}
+              onSelect={(parent, student) => { if (student) setProfileId(student.id); }}
+            />
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -478,6 +550,14 @@ export default function Students() {
               <span className="text-sm text-secondary-color">-</span>
               <input type="number" className="form-input" placeholder="Max" style={{ width: 70, padding: '6px 10px', height: '32px' }} value={ageTo} onChange={e => setAgeTo(e.target.value)} min="1" max="50" />
             </div>
+
+            <button
+              onClick={() => setShowIncompleteOnly(v => !v)}
+              title="Show only students with missing required fields"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', border: `1px solid ${showIncompleteOnly ? 'var(--danger)' : 'var(--border-color)'}`, background: showIncompleteOnly ? 'var(--danger)' : 'var(--bg-secondary)', color: showIncompleteOnly ? 'white' : 'var(--text-secondary)' }}
+            >
+              <AlertTriangle size={14} /> Incomplete only
+            </button>
           </div>
         </div>
 
@@ -501,6 +581,25 @@ export default function Students() {
           </div>
         </div>
 
+        {/* Missing important data — contextual actions (contact families) */}
+        {!loading && incompleteCount > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: '12px 18px', marginBottom: 20 }}>
+            <AlertTriangle size={18} style={{ color: '#ea580c', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontWeight: 700, color: '#9a3412' }}>{incompleteCount} student{incompleteCount !== 1 ? 's' : ''} missing important data</div>
+              <div style={{ fontSize: '0.76rem', color: '#c2410c' }}>Export their details &amp; missing fields (with contact numbers) to reach the families.</div>
+            </div>
+            <button onClick={() => setShowMissingModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', color: '#9a3412', border: '1px solid #fdba74', borderRadius: 8, padding: '8px 14px', fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem' }}>
+              <AlertTriangle size={14} /> View &amp; Print
+            </button>
+            <button onClick={handleExportMissingExcel}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem', boxShadow: '0 2px 8px rgba(22,163,74,0.3)' }}>
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+          </div>
+        )}
+
         {/* Students Table */}
         <div className="card">
           {loading ? <p style={{ padding: 24, textAlign: 'center' }}>Loading...</p> : (
@@ -508,15 +607,16 @@ export default function Students() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>ID</th><th>Admission No</th><th>Name</th><th>Class</th><th>Section</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th>
+                    <th>ID</th><th>Admission No</th><th>Name</th><th>Class</th><th>Section</th><th>Status</th><th>Data</th><th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 ? (
-                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>No students found.</td></tr>
-                  ) : filtered.map(s => {
+                  {tableRows.length === 0 ? (
+                    <tr><td colSpan="8" style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>{showIncompleteOnly ? 'No incomplete profiles in this view.' : 'No students found.'}</td></tr>
+                  ) : tableRows.map(s => {
                     const c = classes.find(cl => cl.id === s.class_id);
                     const sec = sections.find(sc => sc.id === s.section_id);
+                    const miss = getMissingFields(s, parentOf(s), importantKeys);
                     return (
                       <tr key={s.id}>
                         <td className="text-xs text-secondary-color">{s.id}</td>
@@ -530,6 +630,16 @@ export default function Students() {
                         <td>{c?.class_name || '-'}</td>
                         <td>{sec?.section_name || '-'}</td>
                         <td><span className={`badge ${s.status === 'Active' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span></td>
+                        <td>
+                          {miss.length === 0 ? (
+                            <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={12} /> Complete</span>
+                          ) : (
+                            <button onClick={() => handleEdit(s)} title={`Missing: ${miss.map(m => m.label).join(', ')}`}
+                              className="badge badge-danger" style={{ border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <AlertTriangle size={12} /> {miss.length} missing
+                            </button>
+                          )}
+                        </td>
                         <td style={{ textAlign: 'right' }}>
                           <button onClick={() => setProfileId(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', marginRight: 8 }} title="View Profile"><Eye size={16} /></button>
                           <button onClick={() => handleEdit(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', marginRight: 8 }} title="Edit"><Edit2 size={16} /></button>
@@ -562,6 +672,165 @@ export default function Students() {
         onExcel={handleExportExcel}
         filterSummary={filterSummaryText}
       />
+
+      {/* Missing Info Modal */}
+      {showMissingModal && (
+        <div className="no-print" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(6px)' }}>
+          <div style={{ background: 'white', borderRadius: 20, width: '100%', maxWidth: 720, maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.35)', animation: 'fadeIn 0.25s ease' }}>
+            {/* Header */}
+            <div style={{ background: 'linear-gradient(135deg,#E31A1A 0%,#b91c1c 100%)', padding: '20px 26px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AlertTriangle size={18} /> Missing Admission Data
+                </div>
+                <div style={{ fontSize: '0.73rem', color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>
+                  {incompleteCount} of {filtered.length} students in this view need attention
+                </div>
+              </div>
+              <button onClick={() => setShowMissingModal(false)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 10, padding: 7, cursor: 'pointer', color: 'white', display: 'flex' }}>
+                <X size={18} />
+              </button>
+            </div>
+            {/* Note */}
+            <div style={{ padding: '9px 26px', background: '#f8fafc', borderBottom: '1px solid var(--border-color)', fontSize: '0.74rem', color: 'var(--text-secondary)', flexShrink: 0 }}>
+              Optional fields (Medical Info, One-Time Charges, Father's Occupation, Mother's Contact) are not checked.
+            </div>
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 26px' }}>
+              {incompleteCount === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--success)' }}>
+                  <CheckCircle2 size={42} style={{ marginBottom: 10 }} />
+                  <div style={{ fontWeight: 700, fontSize: '1rem' }}>All profiles in this view are complete 🎉</div>
+                </div>
+              ) : incompleteRows.map(({ s, missing }) => {
+                const c = classes.find(cl => cl.id === s.class_id);
+                const sec = sections.find(sc => sc.id === s.section_id);
+                return (
+                  <div key={s.id} style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{s.name || <span style={{ color: 'var(--danger)' }}>(No name)</span>}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>ID {s.id} · Adm {s.roll_no || '—'} · {c?.class_name || '—'}{sec?.section_name ? ` (${sec.section_name})` : ''}</div>
+                        {(() => { const p = parentOf(s); return (p?.father_name || p?.father_contact || p?.mother_contact) ? (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                            {p?.father_name && `${p.father_name}`}{p?.father_contact && ` · ☎ ${p.father_contact}`}{p?.mother_contact && ` · ☎ ${p.mother_contact}`}
+                          </div>
+                        ) : null; })()}
+                      </div>
+                      <button className="btn btn-primary" style={{ padding: '5px 12px', fontSize: '0.75rem', flexShrink: 0 }} onClick={() => { setShowMissingModal(false); handleEdit(s); }}>
+                        <Edit2 size={13} /> Fill
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                      {missing.map(m => (
+                        <span key={m.key} style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 99, padding: '3px 10px', fontSize: '0.72rem', fontWeight: 600 }}>{m.label}</span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Footer */}
+            <div style={{ padding: '14px 26px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: 10, justifyContent: 'flex-end', background: '#f8fafc', flexShrink: 0 }}>
+              <button onClick={() => setShowMissingModal(false)} style={{ padding: '9px 18px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'white', color: '#64748b', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}>Close</button>
+              {incompleteCount > 0 && (
+                <button onClick={() => { setShowMissingModal(false); handleExportMissingExcel(); }} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#16a34a,#15803d)', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <FileSpreadsheet size={15} /> Export Excel
+                </button>
+              )}
+              {incompleteCount > 0 && (
+                <button onClick={handlePrintMissing} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#E31A1A,#b91c1c)', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <Printer size={15} /> Print Checklist
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRINT-ONLY: Missing Data Checklist */}
+      {printMissing && (
+        <div className="print-only">
+          <div style={{ textAlign: 'center', borderBottom: '3px solid #E31A1A', paddingBottom: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#E31A1A', letterSpacing: '-0.02em' }}>{getSettings().school_name}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#1e293b', marginTop: 4 }}>Missing Admission Data — Checklist</div>
+            <div style={{ fontSize: 10, color: '#64748b', marginTop: 6 }}>
+              {incompleteCount} student{incompleteCount !== 1 ? 's' : ''} with missing fields · Printed {format(new Date(), 'dd MMM yyyy, hh:mm a')}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {incompleteRows.map(({ s, missing }, idx) => {
+              const c = classes.find(cl => cl.id === s.class_id);
+              const sec = sections.find(sc => sc.id === s.section_id);
+              const p = parentOf(s);
+              return (
+                <div key={s.id} style={{ borderBottom: '1px solid #000', paddingBottom: 8, pageBreakInside: 'avoid' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#000' }}>
+                    #{idx + 1} — {s.name || '(no name)'} · ID {s.id} · Adm {s.roll_no || '-'} · {c?.class_name || '-'}{sec?.section_name ? ` (${sec.section_name})` : ''}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#000', marginTop: 2 }}>
+                    Father: {p?.father_name || '-'} · Contact: {p?.father_contact || p?.mother_contact || '-'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#000', marginTop: 3 }}><strong>Missing:</strong> {missing.map(m => m.label).join(', ')}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* PRINT-ONLY: Blank Admission Form (to send home) */}
+      {printBlankForm && (() => {
+        const st = getSettings();
+        const wideKeys = new Set(['address', 'medical_info']);
+        return (
+          <div className="print-only">
+            {/* Letterhead */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, borderBottom: '3px solid #4318FF', paddingBottom: 12, marginBottom: 12 }}>
+              <img src={st.logo || '/logo.png'} alt="" style={{ width: 64, height: 64, objectFit: 'contain' }} />
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 900, color: '#4318FF', letterSpacing: '-0.02em' }}>{st.school_name}</div>
+                {st.tagline && <div style={{ fontSize: 11, color: '#334155', fontWeight: 600 }}>{st.tagline}</div>}
+                <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{st.address}{st.phone ? `  ·  ☎ ${st.phone}` : ''}</div>
+              </div>
+              <div style={{ width: 88, height: 106, border: '1px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#475569', textAlign: 'center', padding: 4 }}>
+                Affix Recent Photograph
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'center', marginBottom: 6 }}>
+              <span style={{ display: 'inline-block', background: '#4318FF', color: 'white', fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', padding: '4px 18px', borderRadius: 4 }}>STUDENT ADMISSION FORM</span>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 9, color: '#64748b', marginBottom: 10 }}><span style={{ color: '#f59e0b' }}>★</span> = Required field</div>
+
+            {ADMISSION_FIELD_GROUPS.map(group => (
+              <div key={group.label} style={{ marginBottom: 12, pageBreakInside: 'avoid' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#4318FF', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #cbd5e1', paddingBottom: 3, marginBottom: 8 }}>{group.label}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px' }}>
+                  {group.fields.map(f => (
+                    <div key={f.key} style={{ gridColumn: wideKeys.has(f.key) ? '1 / -1' : 'auto' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#000', marginBottom: 4 }}>
+                        {importantKeys.includes(f.key) && <span style={{ color: '#f59e0b' }}>★ </span>}{f.label}
+                      </div>
+                      <div style={{ borderBottom: '1px solid #000', height: 14 }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Declaration + signatures */}
+            <div style={{ marginTop: 14, fontSize: 10, color: '#000', pageBreakInside: 'avoid' }}>
+              <div style={{ marginBottom: 22 }}>I hereby declare that the information provided above is true and correct to the best of my knowledge.</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24 }}>
+                <div style={{ flex: 1 }}><div style={{ borderTop: '1px solid #000', paddingTop: 3, textAlign: 'center' }}>Parent / Guardian Signature</div></div>
+                <div style={{ flex: 1 }}><div style={{ borderTop: '1px solid #000', paddingTop: 3, textAlign: 'center' }}>Date</div></div>
+                <div style={{ flex: 1 }}><div style={{ borderTop: '1px solid #000', paddingTop: 3, textAlign: 'center' }}>Principal / Admission Officer</div></div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* PRINT-ONLY: Bulk Student ID Cards — packed onto A4 pages */}
       {printCards && (

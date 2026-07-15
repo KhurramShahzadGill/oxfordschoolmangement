@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { getSettings, saveSettings, defaultSettings } from '../services/db';
 import { compressImage } from '../utils/image';
-import { Save, RotateCcw, Building2 } from 'lucide-react';
+import { ADMISSION_FIELD_GROUPS, DEFAULT_IMPORTANT_KEYS } from '../utils/completeness';
+import { Save, RotateCcw, Building2, Star } from 'lucide-react';
 
 export default function Settings() {
   const [form, setForm] = useState(getSettings());
@@ -13,7 +14,7 @@ export default function Settings() {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      const dataUrl = await compressImage(file, { maxDim: 256, quality: 0.85 });
+      const dataUrl = await compressImage(file, { maxDim: 256, targetKB: 80, startQuality: 0.9 });
       set('logo', dataUrl);
     } catch {
       alert('Could not read the image file. Please try another image.');
@@ -32,6 +33,12 @@ export default function Settings() {
     setForm(getSettings());
     setSaved(true);
   };
+
+  // ── Important-fields config (applies to every student) ──
+  const impSet = new Set(form.important_fields || DEFAULT_IMPORTANT_KEYS);
+  const setImportant = (keys) => set('important_fields', keys);
+  const toggleImp = (key) => { const s = new Set(impSet); s.has(key) ? s.delete(key) : s.add(key); setImportant([...s]); };
+  const setGroupImp = (group, on) => { const s = new Set(impSet); group.fields.forEach(f => on ? s.add(f.key) : s.delete(f.key)); setImportant([...s]); };
 
   const inputStyle = { padding: '10px 14px', fontSize: '0.9rem' };
 
@@ -89,6 +96,54 @@ export default function Settings() {
           <button type="button" className="btn btn-secondary" onClick={handleReset}>
             <RotateCcw size={15} /> Reset to Defaults
           </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {saved && <span className="text-sm" style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Settings saved</span>}
+            <button type="button" className="btn btn-primary" style={{ padding: '10px 24px' }} onClick={handleSave}>
+              <Save size={16} /> Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Important admission fields (applies to every student) */}
+      <div className="card" style={{ marginTop: 24 }}>
+        <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Star size={16} /> Admission Form — Important Fields
+        </h2>
+        <p className="text-xs text-secondary-color mb-4">
+          Fields marked <span style={{ color: '#f59e0b' }}>★</span> are treated as important for <strong>every</strong> student and are checked for missing data.
+          While filling a student's admission form you can still override any field for that single student.
+        </p>
+
+        {ADMISSION_FIELD_GROUPS.map(group => {
+          const allOn = group.fields.every(f => impSet.has(f.key));
+          return (
+            <div key={group.label} style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{group.label}</span>
+                <button type="button" onClick={() => setGroupImp(group, !allOn)}
+                  style={{ background: allOn ? '#fef3c7' : '#f1f5f9', color: allOn ? '#b45309' : '#475569', border: 'none', borderRadius: 5, padding: '2px 10px', fontSize: '0.66rem', fontWeight: 700, cursor: 'pointer' }}>
+                  {allOn ? 'Clear all' : 'Mark all ★'}
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                {group.fields.map(f => {
+                  const on = impSet.has(f.key);
+                  return (
+                    <label key={f.key} onClick={() => toggleImp(f.key)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '7px 10px', border: `1px solid ${on ? '#fde68a' : 'var(--border-color)'}`, background: on ? '#fffbeb' : 'white', borderRadius: 8, userSelect: 'none' }}>
+                      <span style={{ fontSize: '0.95rem', lineHeight: 1, color: on ? '#f59e0b' : '#cbd5e1' }}>{on ? '★' : '☆'}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>{f.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1px solid var(--border-color)' }}>
+          <span className="text-xs text-secondary-color">{impSet.size} field{impSet.size !== 1 ? 's' : ''} marked important</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {saved && <span className="text-sm" style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Settings saved</span>}
             <button type="button" className="btn btn-primary" style={{ padding: '10px 24px' }} onClick={handleSave}>

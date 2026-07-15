@@ -3,6 +3,7 @@ import { apiFees, apiStudents, apiParents, apiClasses, apiSections, apiCustomCha
 import { X, ChevronDown, ChevronRight, Receipt, Printer, History, FileSpreadsheet } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import FeeVoucher from '../components/FeeVoucher';
+import FamilySearch from '../components/FamilySearch';
 import * as XLSX from 'xlsx';
 
 const fmtM = (m) => { try { return format(parseISO(m + '-01'), 'MMM yyyy'); } catch { return m; } };
@@ -636,7 +637,19 @@ export default function Fees() {
             </select>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <input className="form-input" style={{ flex: 1, minWidth: 260, ...inp }} placeholder="Search by Student ID, Admission No, Student Name or Parent Name..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
+            <div style={{ flex: 1, minWidth: 260 }}>
+              <FamilySearch
+                students={students}
+                parents={parents}
+                classes={classes}
+                sections={sections}
+                selected={parentFilter}
+                query={studentSearch}
+                onQueryChange={setStudentSearch}
+                onSelect={(parent) => { if (parent) { setParentFilter(parent); setStudentSearch(''); } }}
+                onClear={() => setParentFilter(null)}
+              />
+            </div>
           </div>
         </div>
 
