@@ -18,7 +18,9 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (error) {
-      setError('Email or password is wrong. Please try again.');
+      // Show Supabase's actual message during setup/testing so mismatches
+      // (unconfirmed email, wrong password, etc.) are easy to diagnose.
+      setError(`Login failed: ${error.message}`);
       return;
     }
     navigate('/');
