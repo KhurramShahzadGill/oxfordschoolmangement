@@ -9,7 +9,7 @@ import {
   Settings as SettingsIcon,
   LogOut
 } from 'lucide-react';
-import { getSettings } from '../services/db';
+import { getSettings, clearSchoolContext } from '../services/db';
 import { supabase } from '../services/supabase';
 
 export default function Layout() {
@@ -18,6 +18,7 @@ export default function Layout() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    clearSchoolContext();
     navigate('/login');
   };
 

@@ -21,17 +21,25 @@ export default function Settings() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.school_name.trim()) { alert('School name is required.'); return; }
-    saveSettings(form);
-    setSaved(true);
+    try {
+      await saveSettings(form);
+      setSaved(true);
+    } catch (err) {
+      alert('Could not save settings: ' + err.message);
+    }
   };
 
-  const handleReset = () => {
-    if (!window.confirm('Reset all settings to default values?')) return;
-    saveSettings(defaultSettings);
-    setForm(getSettings());
-    setSaved(true);
+  const handleReset = async () => {
+    if (!window.confirm('Reset the important-field selection to defaults?')) return;
+    try {
+      await saveSettings({ important_fields: defaultSettings.important_fields });
+      setForm(getSettings());
+      setSaved(true);
+    } catch (err) {
+      alert('Could not reset: ' + err.message);
+    }
   };
 
   // ── Important-fields config (applies to every student) ──

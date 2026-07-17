@@ -14,6 +14,21 @@
 import { supabase } from './supabase';
 import { DEFAULT_IMPORTANT_KEYS } from '../utils/completeness';
 
+// ===== School context (multi-tenant) =====
+// After login we load the logged-in user's school row once and cache it.
+// RLS makes every query return only this school's data automatically; for
+// INSERTs we stamp school_id ourselves via withSchool().
+let currentSchool = null;
+export const loadSchoolContext = async () => {
+  const { data, error } = await supabase.from('schools').select('*').limit(1).maybeSingle();
+  if (error) throw error;
+  currentSchool = data;
+  return data;
+};
+export const getSchoolId = () => currentSchool?.id || null;
+export const clearSchoolContext = () => { currentSchool = null; };
+const withSchool = (obj) => ({ ...obj, school_id: getSchoolId() });
+
 // ===== Money normalization =====
 // Every amount is kept as a clean whole-rupee NUMBER so it shows the same on
 // every screen (no float drift, no text-vs-number mixing).
@@ -89,7 +104,7 @@ export const uploadStudentPhoto = async (picture) => {
 // ========== CLASSES API ==========
 export const apiClasses = {
   getAll: async () => rowsOf(supabase.from('classes').select('*').order('class_name')),
-  create: async (data) => rowOf(supabase.from('classes').insert(data).select().single()),
+  create: async (data) => rowOf(supabase.from('classes').insert(withSchool(data)).select().single()),
   update: async (id, data) => rowOf(supabase.from('classes').update(data).eq('id', id).select().single()),
   delete: async (id) => { const { error } = await supabase.from('classes').delete().eq('id', id); if (error) throw error; return true; },
 };
@@ -98,7 +113,7 @@ export const apiClasses = {
 export const apiSections = {
   getAll: async () => rowsOf(supabase.from('sections').select('*')),
   getByClassId: async (classId) => rowsOf(supabase.from('sections').select('*').eq('class_id', classId)),
-  create: async (data) => rowOf(supabase.from('sections').insert(data).select().single()),
+  create: async (data) => rowOf(supabase.from('sections').insert(withSchool(data)).select().single()),
   update: async (id, data) => rowOf(supabase.from('sections').update(data).eq('id', id).select().single()),
   delete: async (id) => { const { error } = await supabase.from('sections').delete().eq('id', id); if (error) throw error; return true; },
 };
@@ -122,13 +137,15 @@ export const apiParents = {
         fuzzyNameMatch(p.father_name, query) || fuzzyNameMatch(p.mother_name, query);
     });
   },
-  create: async (data) => rowOf(supabase.from('parents').insert(data).select().single()),
+  create: async (data) => rowOf(supabase.from('parents').insert(withSchool(data)).select().single()),
   createOrGet: async (data) => {
     if (data.father_cnic) {
+      // RLS already scopes this to the current school, so a same-CNIC match
+      // can only be this school's own parent record.
       const existing = await rowOf(supabase.from('parents').select('*').eq('father_cnic', data.father_cnic).maybeSingle());
       if (existing) return { parent: existing, isNew: false };
     }
-    const parent = await rowOf(supabase.from('parents').insert(data).select().single());
+    const parent = await rowOf(supabase.from('parents').insert(withSchool(data)).select().single());
     return { parent, isNew: true };
   },
   update: async (id, data) => rowOf(supabase.from('parents').update(data).eq('id', id).select().single()),
@@ -152,7 +169,7 @@ export const apiStudents = {
   create: async (data) => {
     const clean = normMoney({ ...data, status: data.status || 'Active' }, STUDENT_MONEY);
     delete clean.id; // the database assigns the id (sequence)
-    return toNumbers(await rowOf(supabase.from('students').insert(clean).select().single()), STUDENT_MONEY);
+    return toNumbers(await rowOf(supabase.from('students').insert(withSchool(clean)).select().single()), STUDENT_MONEY);
   },
   update: async (id, data) => {
     const clean = normMoney(data, STUDENT_MONEY);
@@ -163,12 +180,12 @@ export const apiStudents = {
   promote: async (studentId, toClassId, toSectionId) => {
     const student = await rowOf(supabase.from('students').select('class_id,section_id').eq('id', studentId).maybeSingle());
     if (!student) throw new Error('Student not found');
-    const { error: hErr } = await supabase.from('student_history').insert({
+    const { error: hErr } = await supabase.from('student_history').insert(withSchool({
       student_id: studentId,
       from_class_id: student.class_id, from_section_id: student.section_id,
       to_class_id: toClassId, to_section_id: toSectionId,
       date: new Date().toISOString().split('T')[0], type: 'promotion',
-    });
+    }));
     if (hErr) throw hErr;
     return rowOf(supabase.from('students').update({ class_id: toClassId, section_id: toSectionId }).eq('id', studentId).select().single());
   },
@@ -185,7 +202,7 @@ export const apiStudentHistory = {
 export const apiFees = {
   getAll: async () => mapMoney(await rowsOf(supabase.from('fees').select('*')), FEE_MONEY),
   getByStudentId: async (studentId) => mapMoney(await rowsOf(supabase.from('fees').select('*').eq('student_id', studentId)), FEE_MONEY),
-  create: async (data) => toNumbers(await rowOf(supabase.from('fees').insert(normMoney(data, FEE_MONEY)).select().single()), FEE_MONEY),
+  create: async (data) => toNumbers(await rowOf(supabase.from('fees').insert(withSchool(normMoney(data, FEE_MONEY))).select().single()), FEE_MONEY),
   update: async (id, data) => toNumbers(await rowOf(supabase.from('fees').update(normMoney(data, FEE_MONEY)).eq('id', id).select().single()), FEE_MONEY),
   delete: async (id) => { const { error } = await supabase.from('fees').delete().eq('id', id); if (error) throw error; return true; },
 };
@@ -196,31 +213,34 @@ export const apiCustomCharges = {
   getByStudentId: async (studentId) => mapMoney(await rowsOf(supabase.from('custom_charges').select('*').eq('student_id', studentId)), CHARGE_MONEY),
   create: async (data) => {
     const clean = normMoney({ date_created: new Date().toISOString().split('T')[0], ...data }, CHARGE_MONEY);
-    return toNumbers(await rowOf(supabase.from('custom_charges').insert(clean).select().single()), CHARGE_MONEY);
+    return toNumbers(await rowOf(supabase.from('custom_charges').insert(withSchool(clean)).select().single()), CHARGE_MONEY);
   },
   update: async (id, data) => toNumbers(await rowOf(supabase.from('custom_charges').update(normMoney(data, CHARGE_MONEY)).eq('id', id).select().single()), CHARGE_MONEY),
   delete: async (id) => { const { error } = await supabase.from('custom_charges').delete().eq('id', id); if (error) throw error; return true; },
 };
 
-// ========== SCHOOL SETTINGS (localStorage for now) ==========
-const SETTINGS_KEY = 'ogs_settings';
+// ========== SCHOOL SETTINGS (per-school, from the schools table) ==========
+// Neutral defaults are shown before login / while the school row loads.
 export const defaultSettings = {
-  school_name: 'Oxford Grammar School',
-  tagline: 'Excellence in Education',
-  address: 'Chak No. 202/RB, Gatti Faisalabad',
-  phone: '0321-6088202',
+  school_name: 'School Management',
+  tagline: '',
+  address: '',
+  phone: '',
   logo: '',
   important_fields: DEFAULT_IMPORTANT_KEYS,
+  features: {},
 };
-export const getSettings = () => {
-  try {
-    return { ...defaultSettings, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
-  } catch {
-    return { ...defaultSettings };
+// Reads from the cached school row (loaded at login). Stays synchronous so the
+// Layout, print components and login screen can use it directly.
+export const getSettings = () => ({ ...defaultSettings, ...(currentSchool || {}) });
+
+export const saveSettings = async (data) => {
+  const id = getSchoolId();
+  if (id) {
+    const { error } = await supabase.from('schools').update(data).eq('id', id);
+    if (error) throw error;
   }
-};
-export const saveSettings = (data) => {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...getSettings(), ...data }));
+  currentSchool = { ...(currentSchool || {}), ...data };
   return getSettings();
 };
 export const getImportantFields = () => {

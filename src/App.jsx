@@ -9,19 +9,23 @@ import Fees from './pages/Fees';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { supabase } from './services/supabase';
+import { loadSchoolContext } from './services/db';
 
-// Auth guard — allows access only when a Supabase session exists.
+// Auth guard — allows access only when a Supabase session exists, and loads
+// the user's school (branding + settings) before showing the app.
 const RequireAuth = ({ children }) => {
   const [status, setStatus] = useState('loading'); // 'loading' | 'in' | 'out'
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setStatus(data.session ? 'in' : 'out');
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setStatus(session ? 'in' : 'out');
-    });
-    return () => sub.subscription.unsubscribe();
+    let active = true;
+    const resolve = async (session) => {
+      if (!session) { if (active) setStatus('out'); return; }
+      try { await loadSchoolContext(); } catch { /* fall back to defaults */ }
+      if (active) setStatus('in');
+    };
+    supabase.auth.getSession().then(({ data }) => resolve(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => resolve(session));
+    return () => { active = false; sub.subscription.unsubscribe(); };
   }, []);
 
   if (status === 'loading') {
