@@ -27,7 +27,13 @@ export const loadSchoolContext = async () => {
 };
 export const getSchoolId = () => currentSchool?.id || null;
 export const clearSchoolContext = () => { currentSchool = null; };
-const withSchool = (obj) => ({ ...obj, school_id: getSchoolId() });
+const withSchool = (obj) => {
+  const school_id = getSchoolId();
+  // Without a linked school every insert would be silently rejected by RLS,
+  // so fail loudly with a message that actually explains the problem.
+  if (!school_id) throw new Error('This login is not linked to any school, so data cannot be saved. Please link the user to a school in the database.');
+  return { ...obj, school_id };
+};
 
 // ===== Money normalization =====
 // Every amount is kept as a clean whole-rupee NUMBER so it shows the same on

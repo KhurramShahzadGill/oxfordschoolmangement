@@ -36,15 +36,19 @@ export default function Classes() {
   // ===== Class CRUD =====
   const handleClassSubmit = async (e) => {
     e.preventDefault();
-    if (editingClassId) {
-      await apiClasses.update(editingClassId, classForm);
-    } else {
-      await apiClasses.create(classForm);
+    try {
+      if (editingClassId) {
+        await apiClasses.update(editingClassId, classForm);
+      } else {
+        await apiClasses.create(classForm);
+      }
+      setClassForm({ class_name: '' });
+      setEditingClassId(null);
+      setShowClassForm(false);
+      loadData();
+    } catch (err) {
+      alert('Could not save the class:\n\n' + err.message);
     }
-    setClassForm({ class_name: '' });
-    setEditingClassId(null);
-    setShowClassForm(false);
-    loadData();
   };
 
   const handleEditClass = (c) => {
@@ -70,15 +74,19 @@ export default function Classes() {
   // ===== Section CRUD =====
   const handleSectionSubmit = async (e, classId) => {
     e.preventDefault();
-    if (editingSectionId) {
-      await apiSections.update(editingSectionId, { ...sectionForm, class_id: classId });
-    } else {
-      await apiSections.create({ ...sectionForm, class_id: classId });
+    try {
+      if (editingSectionId) {
+        await apiSections.update(editingSectionId, { ...sectionForm, class_id: classId });
+      } else {
+        await apiSections.create({ ...sectionForm, class_id: classId });
+      }
+      setSectionForm({ section_name: '' });
+      setEditingSectionId(null);
+      setShowSectionForm(null);
+      loadData();
+    } catch (err) {
+      alert('Could not save the section:\n\n' + err.message);
     }
-    setSectionForm({ section_name: '' });
-    setEditingSectionId(null);
-    setShowSectionForm(null);
-    loadData();
   };
 
   const handleEditSection = (s) => {
