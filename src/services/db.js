@@ -32,7 +32,22 @@ const withSchool = (obj) => {
   // Without a linked school every insert would be silently rejected by RLS,
   // so fail loudly with a message that actually explains the problem.
   if (!school_id) throw new Error('This login is not linked to any school, so data cannot be saved. Please link the user to a school in the database.');
-  return { ...obj, school_id };
+  return { ...nullifyBlanks(obj), school_id };
+};
+
+// Blank form inputs arrive as "", but Postgres rejects "" for date and uuid
+// columns — send NULL instead so optional fields can legitimately stay empty.
+const BLANK_TO_NULL_FIELDS = [
+  // dates
+  'dob', 'admission_date', 'leaving_date', 'paid_date', 'date', 'date_created',
+  // uuid references
+  'parent_id', 'class_id', 'section_id',
+  'from_class_id', 'from_section_id', 'to_class_id', 'to_section_id',
+];
+const nullifyBlanks = (obj) => {
+  const o = { ...obj };
+  BLANK_TO_NULL_FIELDS.forEach(k => { if (o[k] === '') o[k] = null; });
+  return o;
 };
 
 // ===== Money normalization =====
@@ -178,7 +193,7 @@ export const apiStudents = {
     return toNumbers(await rowOf(supabase.from('students').insert(withSchool(clean)).select().single()), STUDENT_MONEY);
   },
   update: async (id, data) => {
-    const clean = normMoney(data, STUDENT_MONEY);
+    const clean = nullifyBlanks(normMoney(data, STUDENT_MONEY));
     return toNumbers(await rowOf(supabase.from('students').update(clean).eq('id', id).select().single()), STUDENT_MONEY);
   },
   // Cascade delete (fees/charges/history) is handled by the DB foreign keys.
@@ -209,7 +224,7 @@ export const apiFees = {
   getAll: async () => mapMoney(await rowsOf(supabase.from('fees').select('*')), FEE_MONEY),
   getByStudentId: async (studentId) => mapMoney(await rowsOf(supabase.from('fees').select('*').eq('student_id', studentId)), FEE_MONEY),
   create: async (data) => toNumbers(await rowOf(supabase.from('fees').insert(withSchool(normMoney(data, FEE_MONEY))).select().single()), FEE_MONEY),
-  update: async (id, data) => toNumbers(await rowOf(supabase.from('fees').update(normMoney(data, FEE_MONEY)).eq('id', id).select().single()), FEE_MONEY),
+  update: async (id, data) => toNumbers(await rowOf(supabase.from('fees').update(nullifyBlanks(normMoney(data, FEE_MONEY))).eq('id', id).select().single()), FEE_MONEY),
   delete: async (id) => { const { error } = await supabase.from('fees').delete().eq('id', id); if (error) throw error; return true; },
 };
 
@@ -221,7 +236,7 @@ export const apiCustomCharges = {
     const clean = normMoney({ date_created: new Date().toISOString().split('T')[0], ...data }, CHARGE_MONEY);
     return toNumbers(await rowOf(supabase.from('custom_charges').insert(withSchool(clean)).select().single()), CHARGE_MONEY);
   },
-  update: async (id, data) => toNumbers(await rowOf(supabase.from('custom_charges').update(normMoney(data, CHARGE_MONEY)).eq('id', id).select().single()), CHARGE_MONEY),
+  update: async (id, data) => toNumbers(await rowOf(supabase.from('custom_charges').update(nullifyBlanks(normMoney(data, CHARGE_MONEY))).eq('id', id).select().single()), CHARGE_MONEY),
   delete: async (id) => { const { error } = await supabase.from('custom_charges').delete().eq('id', id); if (error) throw error; return true; },
 };
 
