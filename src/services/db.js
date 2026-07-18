@@ -32,22 +32,7 @@ const withSchool = (obj) => {
   // Without a linked school every insert would be silently rejected by RLS,
   // so fail loudly with a message that actually explains the problem.
   if (!school_id) throw new Error('This login is not linked to any school, so data cannot be saved. Please link the user to a school in the database.');
-  return { ...nullifyBlanks(obj), school_id };
-};
-
-// Blank form inputs arrive as "", but Postgres rejects "" for date and uuid
-// columns — send NULL instead so optional fields can legitimately stay empty.
-const BLANK_TO_NULL_FIELDS = [
-  // dates
-  'dob', 'admission_date', 'leaving_date', 'paid_date', 'date', 'date_created',
-  // uuid references
-  'parent_id', 'class_id', 'section_id',
-  'from_class_id', 'from_section_id', 'to_class_id', 'to_section_id',
-];
-const nullifyBlanks = (obj) => {
-  const o = { ...obj };
-  BLANK_TO_NULL_FIELDS.forEach(k => { if (o[k] === '') o[k] = null; });
-  return o;
+  return { ...obj, school_id };
 };
 
 // ===== Money normalization =====
@@ -57,17 +42,6 @@ const money = (v) => Math.round(Number(v) || 0);
 const STUDENT_MONEY = ['monthly_fee', 'admission_fee', 'security_fee', 'paper_fund', 'stationery_fee', 'other_fee'];
 const FEE_MONEY = ['monthly_fee', 'fine', 'paper_fund', 'other_charges', 'amount_paid'];
 const CHARGE_MONEY = ['amount', 'amount_paid'];
-
-// Blank money inputs must become 0, not "" — Postgres rejects "" for numeric.
-// Keys that were not supplied at all are left untouched (important for updates).
-const normMoney = (obj, keys) => {
-  const o = { ...obj };
-  keys.forEach(k => {
-    if (!(k in o)) return;
-    o[k] = (o[k] === '' || o[k] === null || o[k] === undefined) ? 0 : money(o[k]);
-  });
-  return o;
-};
 
 // Postgres returns numeric columns as strings — turn the money fields back into
 // numbers on the way out so the UI (toLocaleString etc.) works as before.
@@ -79,9 +53,44 @@ const toNumbers = (obj, keys) => {
 };
 const mapMoney = (arr, keys) => (arr || []).map(r => toNumbers(r, keys));
 
-// Small helpers that throw on error so callers can rely on the returned data.
-const rowsOf = async (query) => { const { data, error } = await query; if (error) throw error; return data || []; };
-const rowOf = async (query) => { const { data, error } = await query; if (error) throw error; return data; };
+/*
+ * Column types per table. Forms hand us "" for anything left blank, but
+ * Postgres only accepts "" for text — numeric needs a number and date/uuid
+ * need NULL. Declaring the types here (instead of guessing per field) makes
+ * this whole class of "invalid input syntax" errors impossible.
+ */
+const COLUMN_TYPES = {
+  classes:         { num: [],            date: [],                                    uuid: [] },
+  sections:        { num: [],            date: [],                                    uuid: ['class_id'] },
+  parents:         { num: [],            date: [],                                    uuid: [] },
+  students:        { num: STUDENT_MONEY, date: ['dob', 'admission_date', 'leaving_date'], uuid: ['parent_id', 'class_id', 'section_id'] },
+  student_history: { num: [],            date: ['date'],                              uuid: ['from_class_id', 'from_section_id', 'to_class_id', 'to_section_id'] },
+  fees:            { num: FEE_MONEY,     date: ['paid_date'],                         uuid: [] },
+  custom_charges:  { num: CHARGE_MONEY,  date: ['date_created', 'paid_date'],         uuid: [] },
+};
+
+// Clean a payload for one table: blank numbers -> 0, blank dates/uuids -> NULL.
+// Keys that were not supplied are left untouched, so updates stay partial.
+const prep = (table, obj) => {
+  const t = COLUMN_TYPES[table] || { num: [], date: [], uuid: [] };
+  const o = { ...obj };
+  t.num.forEach(k => { if (k in o) o[k] = (o[k] === '' || o[k] === null || o[k] === undefined) ? 0 : money(o[k]); });
+  [...t.date, ...t.uuid].forEach(k => { if (k in o && o[k] === '') o[k] = null; });
+  return o;
+};
+
+// Small helpers that throw on error. The table name is included so a failure
+// points straight at the operation that caused it.
+const rowsOf = async (query, table = '') => {
+  const { data, error } = await query;
+  if (error) throw new Error(table ? `[${table}] ${error.message}` : error.message);
+  return data || [];
+};
+const rowOf = async (query, table = '') => {
+  const { data, error } = await query;
+  if (error) throw new Error(table ? `[${table}] ${error.message}` : error.message);
+  return data;
+};
 
 // ========== Fuzzy Name Search Utility ==========
 // Handles common Urdu-to-English transliteration variations.
@@ -129,18 +138,18 @@ export const uploadStudentPhoto = async (picture) => {
 
 // ========== CLASSES API ==========
 export const apiClasses = {
-  getAll: async () => rowsOf(supabase.from('classes').select('*').order('class_name')),
-  create: async (data) => rowOf(supabase.from('classes').insert(withSchool(data)).select().single()),
-  update: async (id, data) => rowOf(supabase.from('classes').update(data).eq('id', id).select().single()),
+  getAll: async () => rowsOf(supabase.from('classes').select('*').order('class_name'), 'classes'),
+  create: async (data) => rowOf(supabase.from('classes').insert(withSchool(prep('classes', data))).select().single(), 'classes'),
+  update: async (id, data) => rowOf(supabase.from('classes').update(prep('classes', data)).eq('id', id).select().single(), 'classes'),
   delete: async (id) => { const { error } = await supabase.from('classes').delete().eq('id', id); if (error) throw error; return true; },
 };
 
 // ========== SECTIONS API ==========
 export const apiSections = {
-  getAll: async () => rowsOf(supabase.from('sections').select('*')),
-  getByClassId: async (classId) => rowsOf(supabase.from('sections').select('*').eq('class_id', classId)),
-  create: async (data) => rowOf(supabase.from('sections').insert(withSchool(data)).select().single()),
-  update: async (id, data) => rowOf(supabase.from('sections').update(data).eq('id', id).select().single()),
+  getAll: async () => rowsOf(supabase.from('sections').select('*'), 'sections'),
+  getByClassId: async (classId) => rowsOf(supabase.from('sections').select('*').eq('class_id', classId), 'sections'),
+  create: async (data) => rowOf(supabase.from('sections').insert(withSchool(prep('sections', data))).select().single(), 'sections'),
+  update: async (id, data) => rowOf(supabase.from('sections').update(prep('sections', data)).eq('id', id).select().single(), 'sections'),
   delete: async (id) => { const { error } = await supabase.from('sections').delete().eq('id', id); if (error) throw error; return true; },
 };
 
@@ -163,18 +172,18 @@ export const apiParents = {
         fuzzyNameMatch(p.father_name, query) || fuzzyNameMatch(p.mother_name, query);
     });
   },
-  create: async (data) => rowOf(supabase.from('parents').insert(withSchool(data)).select().single()),
+  create: async (data) => rowOf(supabase.from('parents').insert(withSchool(prep('parents', data))).select().single(), 'parents'),
   createOrGet: async (data) => {
     if (data.father_cnic) {
       // RLS already scopes this to the current school, so a same-CNIC match
       // can only be this school's own parent record.
-      const existing = await rowOf(supabase.from('parents').select('*').eq('father_cnic', data.father_cnic).maybeSingle());
+      const existing = await rowOf(supabase.from('parents').select('*').eq('father_cnic', data.father_cnic).maybeSingle(), 'parents');
       if (existing) return { parent: existing, isNew: false };
     }
-    const parent = await rowOf(supabase.from('parents').insert(withSchool(data)).select().single());
+    const parent = await rowOf(supabase.from('parents').insert(withSchool(prep('parents', data))).select().single(), 'parents');
     return { parent, isNew: true };
   },
-  update: async (id, data) => rowOf(supabase.from('parents').update(data).eq('id', id).select().single()),
+  update: async (id, data) => rowOf(supabase.from('parents').update(prep('parents', data)).eq('id', id).select().single(), 'parents'),
   delete: async (id) => { const { error } = await supabase.from('parents').delete().eq('id', id); if (error) throw error; return true; },
 };
 
@@ -193,25 +202,25 @@ export const apiStudents = {
     );
   },
   create: async (data) => {
-    const clean = normMoney({ ...data, status: data.status || 'Active' }, STUDENT_MONEY);
+    const clean = prep('students', { ...data, status: data.status || 'Active' });
     delete clean.id; // the database assigns the id (sequence)
-    return toNumbers(await rowOf(supabase.from('students').insert(withSchool(clean)).select().single()), STUDENT_MONEY);
+    return toNumbers(await rowOf(supabase.from('students').insert(withSchool(clean)).select().single(), 'students'), STUDENT_MONEY);
   },
   update: async (id, data) => {
-    const clean = nullifyBlanks(normMoney(data, STUDENT_MONEY));
-    return toNumbers(await rowOf(supabase.from('students').update(clean).eq('id', id).select().single()), STUDENT_MONEY);
+    const clean = prep('students', data);
+    return toNumbers(await rowOf(supabase.from('students').update(clean).eq('id', id).select().single(), 'students'), STUDENT_MONEY);
   },
   // Cascade delete (fees/charges/history) is handled by the DB foreign keys.
   delete: async (id) => { const { error } = await supabase.from('students').delete().eq('id', id); if (error) throw error; return true; },
   promote: async (studentId, toClassId, toSectionId) => {
     const student = await rowOf(supabase.from('students').select('class_id,section_id').eq('id', studentId).maybeSingle());
     if (!student) throw new Error('Student not found');
-    const { error: hErr } = await supabase.from('student_history').insert(withSchool({
+    const { error: hErr } = await supabase.from('student_history').insert(withSchool(prep('student_history', {
       student_id: studentId,
       from_class_id: student.class_id, from_section_id: student.section_id,
       to_class_id: toClassId, to_section_id: toSectionId,
       date: new Date().toISOString().split('T')[0], type: 'promotion',
-    }));
+    })));
     if (hErr) throw hErr;
     return rowOf(supabase.from('students').update({ class_id: toClassId, section_id: toSectionId }).eq('id', studentId).select().single());
   },
@@ -228,8 +237,8 @@ export const apiStudentHistory = {
 export const apiFees = {
   getAll: async () => mapMoney(await rowsOf(supabase.from('fees').select('*')), FEE_MONEY),
   getByStudentId: async (studentId) => mapMoney(await rowsOf(supabase.from('fees').select('*').eq('student_id', studentId)), FEE_MONEY),
-  create: async (data) => toNumbers(await rowOf(supabase.from('fees').insert(withSchool(normMoney(data, FEE_MONEY))).select().single()), FEE_MONEY),
-  update: async (id, data) => toNumbers(await rowOf(supabase.from('fees').update(nullifyBlanks(normMoney(data, FEE_MONEY))).eq('id', id).select().single()), FEE_MONEY),
+  create: async (data) => toNumbers(await rowOf(supabase.from('fees').insert(withSchool(prep('fees', data))).select().single(), 'fees'), FEE_MONEY),
+  update: async (id, data) => toNumbers(await rowOf(supabase.from('fees').update(prep('fees', data)).eq('id', id).select().single(), 'fees'), FEE_MONEY),
   delete: async (id) => { const { error } = await supabase.from('fees').delete().eq('id', id); if (error) throw error; return true; },
 };
 
@@ -238,10 +247,10 @@ export const apiCustomCharges = {
   getAll: async () => mapMoney(await rowsOf(supabase.from('custom_charges').select('*')), CHARGE_MONEY),
   getByStudentId: async (studentId) => mapMoney(await rowsOf(supabase.from('custom_charges').select('*').eq('student_id', studentId)), CHARGE_MONEY),
   create: async (data) => {
-    const clean = normMoney({ date_created: new Date().toISOString().split('T')[0], ...data }, CHARGE_MONEY);
-    return toNumbers(await rowOf(supabase.from('custom_charges').insert(withSchool(clean)).select().single()), CHARGE_MONEY);
+    const clean = prep('custom_charges', { date_created: new Date().toISOString().split('T')[0], ...data });
+    return toNumbers(await rowOf(supabase.from('custom_charges').insert(withSchool(clean)).select().single(), 'custom_charges'), CHARGE_MONEY);
   },
-  update: async (id, data) => toNumbers(await rowOf(supabase.from('custom_charges').update(nullifyBlanks(normMoney(data, CHARGE_MONEY))).eq('id', id).select().single()), CHARGE_MONEY),
+  update: async (id, data) => toNumbers(await rowOf(supabase.from('custom_charges').update(prep('custom_charges', data)).eq('id', id).select().single(), 'custom_charges'), CHARGE_MONEY),
   delete: async (id) => { const { error } = await supabase.from('custom_charges').delete().eq('id', id); if (error) throw error; return true; },
 };
 
