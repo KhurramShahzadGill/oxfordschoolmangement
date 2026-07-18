@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, deleteStudentPhoto, ADMISSION_HEADS } from '../services/db';
+import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, ADMISSION_HEADS } from '../services/db';
 import { Plus, Edit2, Trash2, Eye, FileSpreadsheet, Printer, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { differenceInYears, parseISO, format } from 'date-fns';
 import StudentForm from '../components/StudentForm';
@@ -268,12 +268,11 @@ export default function Students() {
         : await apiStudents.create(studentData);
 
       // The student row exists now — safe to upload the photo and attach it.
+      // The upload overwrites this student's existing file, so nothing is left
+      // behind and no separate cleanup is needed here.
       if (isNewPhoto) {
-        const replacedPhoto = editData?.picture || '';
-        const url = await uploadStudentPhoto(form.picture);
+        const url = await uploadStudentPhoto(form.picture, saved.id);
         await apiStudents.update(saved.id, { picture: url });
-        // Drop the photo it replaced so the bucket doesn't collect old copies.
-        if (replacedPhoto && replacedPhoto !== url) await deleteStudentPhoto(replacedPhoto);
       }
 
       if (!editData) {

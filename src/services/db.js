@@ -123,17 +123,23 @@ export const peekNextStudentId = () => null;
 // Takes the compressed base64 photo from the form, uploads it to the
 // "student-photos" bucket, and returns a public URL to store on the student.
 // Passing an existing URL (when editing) returns it unchanged; empty -> ''.
-export const uploadStudentPhoto = async (picture) => {
+export const uploadStudentPhoto = async (picture, studentId) => {
   if (!picture) return '';
   if (/^https?:\/\//.test(picture)) return picture; // already a stored URL
   if (!picture.startsWith('data:')) return picture;  // unexpected format — leave as-is
 
   const blob = await (await fetch(picture)).blob();
   const ext = blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg';
-  const path = `${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('student-photos').upload(path, blob, { contentType: blob.type, upsert: false });
+  // One fixed path per student. Re-uploading overwrites that same file, so a
+  // replaced photo can never leave its predecessor behind as an orphan.
+  const path = `student-${studentId}.${ext}`;
+  const { error } = await supabase.storage.from('student-photos')
+    .upload(path, blob, { contentType: blob.type, upsert: true });
   if (error) throw error;
-  return supabase.storage.from('student-photos').getPublicUrl(path).data.publicUrl;
+  const publicUrl = supabase.storage.from('student-photos').getPublicUrl(path).data.publicUrl;
+  // The path never changes, so add a version marker — otherwise the browser and
+  // CDN would keep showing the previous photo from cache.
+  return `${publicUrl}?v=${Date.now()}`;
 };
 
 // Delete a photo from the bucket given its public URL. Used when a student's
