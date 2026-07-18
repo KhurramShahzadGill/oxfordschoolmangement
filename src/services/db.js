@@ -174,12 +174,23 @@ export const apiParents = {
   },
   create: async (data) => rowOf(supabase.from('parents').insert(withSchool(prep('parents', data))).select().single(), 'parents'),
   createOrGet: async (data) => {
+    // Match on CNIC when it is provided; otherwise fall back to father's name +
+    // contact. Without that fallback a blank CNIC created a brand new parent on
+    // every save attempt. RLS keeps these lookups inside the current school.
+    let existing = null;
     if (data.father_cnic) {
-      // RLS already scopes this to the current school, so a same-CNIC match
-      // can only be this school's own parent record.
-      const existing = await rowOf(supabase.from('parents').select('*').eq('father_cnic', data.father_cnic).maybeSingle(), 'parents');
-      if (existing) return { parent: existing, isNew: false };
+      existing = await rowOf(supabase.from('parents').select('*').eq('father_cnic', data.father_cnic).maybeSingle(), 'parents');
+    } else if (data.father_name && data.father_contact) {
+      const rows = await rowsOf(
+        supabase.from('parents').select('*')
+          .eq('father_name', data.father_name)
+          .eq('father_contact', data.father_contact)
+          .limit(1),
+        'parents');
+      existing = rows[0] || null;
     }
+    if (existing) return { parent: existing, isNew: false };
+
     const parent = await rowOf(supabase.from('parents').insert(withSchool(prep('parents', data))).select().single(), 'parents');
     return { parent, isNew: true };
   },

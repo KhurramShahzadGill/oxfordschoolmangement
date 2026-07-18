@@ -232,47 +232,66 @@ export default function Students() {
       father_occupation: form.father_occupation, father_contact: form.father_contact,
       mother_name: form.mother_name, mother_cnic: form.mother_cnic, mother_contact: form.mother_contact,
     };
-    // If linked to an existing parent (sibling, or editing) reuse that record;
-    // otherwise find-or-create by CNIC. This avoids duplicate parent records.
+    // Everything below runs inside one try/catch. If the student save fails we
+    // undo the parent we created for it, so a retry cannot pile up duplicates.
     let parent;
-    if (form.parent_id) {
-      parent = await apiParents.update(form.parent_id, parentData);
-    } else {
-      ({ parent } = await apiParents.createOrGet(parentData));
-    }
-
-    // Upload a newly-picked photo to the bucket; keep an existing URL as-is.
-    const pictureUrl = await uploadStudentPhoto(form.picture);
-
-    const studentData = {
-      id: form.id, roll_no: form.roll_no, name: form.name, dob: form.dob,
-      gender: form.gender, admission_date: form.admission_date, leaving_date: form.leaving_date,
-      medical_info: form.medical_info, monthly_fee: Number(form.monthly_fee) || 0, fee_start_month: form.fee_start_month,
-      admission_fee: form.admission_fee, security_fee: form.security_fee, paper_fund: form.paper_fund,
-      stationery_fee: form.stationery_fee, other_fee: form.other_fee,
-      address: form.address,
-      picture: pictureUrl, status: form.status, parent_id: parent.id, class_id: form.class_id, section_id: form.section_id,
-      important_overrides: form.important_overrides || {},
-    };
+    let createdParentId = null;
 
     try {
-      if (editData) {
-        await apiStudents.update(editData.id, studentData);
+      // If linked to an existing parent (sibling, or editing) reuse that record;
+      // otherwise find-or-create. This avoids duplicate parent records.
+      if (form.parent_id) {
+        parent = await apiParents.update(form.parent_id, parentData);
       } else {
-        const created = await apiStudents.create(studentData);
+        const res = await apiParents.createOrGet(parentData);
+        parent = res.parent;
+        if (res.isNew) createdParentId = parent.id;
+      }
+
+      const isNewPhoto = !!form.picture && form.picture.startsWith('data:');
+      const studentData = {
+        roll_no: form.roll_no, name: form.name, dob: form.dob,
+        gender: form.gender, admission_date: form.admission_date, leaving_date: form.leaving_date,
+        medical_info: form.medical_info, monthly_fee: Number(form.monthly_fee) || 0, fee_start_month: form.fee_start_month,
+        admission_fee: form.admission_fee, security_fee: form.security_fee, paper_fund: form.paper_fund,
+        stationery_fee: form.stationery_fee, other_fee: form.other_fee,
+        address: form.address,
+        // Keep any already-stored URL; a freshly picked photo is attached after
+        // the row is saved, so a rejected save never orphans an upload.
+        picture: isNewPhoto ? (editData?.picture || '') : (form.picture || ''),
+        status: form.status, parent_id: parent.id, class_id: form.class_id, section_id: form.section_id,
+        important_overrides: form.important_overrides || {},
+      };
+
+      const saved = editData
+        ? await apiStudents.update(editData.id, studentData)
+        : await apiStudents.create(studentData);
+
+      // The student row exists now — safe to upload the photo and attach it.
+      if (isNewPhoto) {
+        const url = await uploadStudentPhoto(form.picture);
+        await apiStudents.update(saved.id, { picture: url });
+      }
+
+      if (!editData) {
         // Turn any entered one-time charges into collectible charge records
         for (const { key, label } of ADMISSION_HEADS) {
           const amount = Number(form[key] || 0);
           if (amount > 0) {
             await apiCustomCharges.create({
-              student_id: created.id, title: label, is_admission: true,
+              student_id: saved.id, title: label, is_admission: true,
               amount, amount_paid: 0, status: 'Unpaid', paid_date: null,
             });
           }
         }
       }
+
       setShowForm(false); setEditData(null); loadData();
     } catch (err) {
+      // Undo a parent that was created only for this failed save.
+      if (createdParentId) {
+        try { await apiParents.delete(createdParentId); } catch { /* best effort */ }
+      }
       alert(err.message);
     }
   };
