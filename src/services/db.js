@@ -144,9 +144,13 @@ export const deleteStudentPhoto = async (url) => {
   const marker = '/student-photos/';
   const i = url.indexOf(marker);
   if (i === -1) return;
-  const path = url.slice(i + marker.length).split('?')[0];
+  const path = decodeURIComponent(url.slice(i + marker.length).split('?')[0]);
   if (!path) return;
-  try { await supabase.storage.from('student-photos').remove([path]); } catch { /* ignore */ }
+  const { data, error } = await supabase.storage.from('student-photos').remove([path]);
+  // Never block the main operation, but do say why it failed — a silent
+  // failure here is what let old photos pile up unnoticed.
+  if (error) console.warn('[storage] could not delete old photo:', path, error.message);
+  else if (!data || data.length === 0) console.warn('[storage] delete matched no file:', path);
 };
 
 // ========== CLASSES API ==========
