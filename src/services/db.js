@@ -136,6 +136,19 @@ export const uploadStudentPhoto = async (picture) => {
   return supabase.storage.from('student-photos').getPublicUrl(path).data.publicUrl;
 };
 
+// Delete a photo from the bucket given its public URL. Used when a student's
+// photo is replaced or the student is deleted, so old images don't pile up.
+// Best-effort: a failure here must never block the main operation.
+export const deleteStudentPhoto = async (url) => {
+  if (!url || !/^https?:\/\//.test(url)) return;
+  const marker = '/student-photos/';
+  const i = url.indexOf(marker);
+  if (i === -1) return;
+  const path = url.slice(i + marker.length).split('?')[0];
+  if (!path) return;
+  try { await supabase.storage.from('student-photos').remove([path]); } catch { /* ignore */ }
+};
+
 // ========== CLASSES API ==========
 export const apiClasses = {
   getAll: async () => rowsOf(supabase.from('classes').select('*').order('class_name'), 'classes'),
@@ -222,7 +235,14 @@ export const apiStudents = {
     return toNumbers(await rowOf(supabase.from('students').update(clean).eq('id', id).select().single(), 'students'), STUDENT_MONEY);
   },
   // Cascade delete (fees/charges/history) is handled by the DB foreign keys.
-  delete: async (id) => { const { error } = await supabase.from('students').delete().eq('id', id); if (error) throw error; return true; },
+  // The photo lives in storage, so remove it here or it would linger forever.
+  delete: async (id) => {
+    const existing = await rowOf(supabase.from('students').select('picture').eq('id', id).maybeSingle(), 'students');
+    const { error } = await supabase.from('students').delete().eq('id', id);
+    if (error) throw error;
+    if (existing?.picture) await deleteStudentPhoto(existing.picture);
+    return true;
+  },
   promote: async (studentId, toClassId, toSectionId) => {
     const student = await rowOf(supabase.from('students').select('class_id,section_id').eq('id', studentId).maybeSingle());
     if (!student) throw new Error('Student not found');
