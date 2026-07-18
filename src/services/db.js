@@ -58,9 +58,14 @@ const STUDENT_MONEY = ['monthly_fee', 'admission_fee', 'security_fee', 'paper_fu
 const FEE_MONEY = ['monthly_fee', 'fine', 'paper_fund', 'other_charges', 'amount_paid'];
 const CHARGE_MONEY = ['amount', 'amount_paid'];
 
+// Blank money inputs must become 0, not "" — Postgres rejects "" for numeric.
+// Keys that were not supplied at all are left untouched (important for updates).
 const normMoney = (obj, keys) => {
   const o = { ...obj };
-  keys.forEach(k => { if (o[k] !== undefined && o[k] !== '' && o[k] !== null) o[k] = money(o[k]); });
+  keys.forEach(k => {
+    if (!(k in o)) return;
+    o[k] = (o[k] === '' || o[k] === null || o[k] === undefined) ? 0 : money(o[k]);
+  });
   return o;
 };
 
