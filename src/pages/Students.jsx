@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, ADMISSION_HEADS } from '../services/db';
+import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, deleteStudentPhoto, ADMISSION_HEADS } from '../services/db';
 import { Plus, Edit2, Trash2, Eye, FileSpreadsheet, Printer, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { differenceInYears, parseISO, format } from 'date-fns';
 import StudentForm from '../components/StudentForm';
@@ -249,6 +249,8 @@ export default function Students() {
       }
 
       const isNewPhoto = !!form.picture && form.picture.startsWith('data:');
+      // Photo cleared on an existing student — the stored file must go too.
+      const removedPhoto = !!editData?.picture && !form.picture;
       const studentData = {
         roll_no: form.roll_no, name: form.name, dob: form.dob,
         gender: form.gender, admission_date: form.admission_date, leaving_date: form.leaving_date,
@@ -273,6 +275,8 @@ export default function Students() {
       if (isNewPhoto) {
         const url = await uploadStudentPhoto(form.picture, saved.id);
         await apiStudents.update(saved.id, { picture: url });
+      } else if (removedPhoto) {
+        await deleteStudentPhoto(editData.picture);
       }
 
       if (!editData) {
