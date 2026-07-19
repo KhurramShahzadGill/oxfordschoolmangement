@@ -9,6 +9,7 @@ import { differenceInYears, parseISO } from 'date-fns';
 export default function StudentForm({ initial, parents = [], students = [], onSubmit, onCancel, isEdit, nextId }) {
   const [classes, setClasses] = useState([]);
   const [sections, setSections] = useState([]);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [linkedParent, setLinkedParent] = useState(null);
   const [form, setForm] = useState({
     id: '', roll_no: '', name: '', dob: '', gender: 'Male',
@@ -44,6 +45,13 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
     } catch {
       alert('Could not read the image file. Please try another image.');
     }
+  };
+
+  // Clear the photo. Bumping the key resets the file input too, so picking the
+  // same file again still fires onChange.
+  const removePicture = () => {
+    setForm(f => ({ ...f, picture: '' }));
+    setPhotoInputKey(k => k + 1);
   };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -202,8 +210,19 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
           </div>
           <div className="form-group">
             {impLabel('picture', 'Student Picture')}
-            <input type="file" accept="image/*" onChange={handlePicture} style={{ fontSize: '0.85rem' }} />
-            {form.picture && <img src={form.picture} alt="preview" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', marginTop: 8 }} />}
+            <input key={photoInputKey} type="file" accept="image/*" onChange={handlePicture} style={{ fontSize: '0.85rem' }} />
+            {form.picture && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                <img src={form.picture} alt="preview" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
+                <button
+                  type="button"
+                  onClick={removePicture}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--danger)', fontSize: '0.78rem', fontWeight: 600, textDecoration: 'underline' }}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
