@@ -130,23 +130,33 @@ export const uploadStudentPhoto = async (picture, studentId) => {
 
   const blob = await (await fetch(picture)).blob();
   const ext = blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg';
-  // One fixed path per student. Re-uploading overwrites that same file, so a
-  // replaced photo can never leave its predecessor behind as an orphan.
-  const path = `student-${studentId}.${ext}`;
+  const prefix = `student-${studentId}.`;
+  const path = `${prefix}${ext}`;
+
+  // Upload first, so a failure here never loses the student's existing photo.
   const { error } = await supabase.storage.from('student-photos')
     .upload(path, blob, { contentType: blob.type, upsert: true });
   if (error) throw error;
 
-  // Guard against a previous upload having landed on a different extension
-  // (e.g. an older browser without WebP support saved .jpg) — without this,
-  // that old file would never get overwritten and would linger as an orphan.
-  const stalePaths = ['webp', 'jpg', 'png'].filter(e => e !== ext).map(e => `student-${studentId}.${e}`);
-  const { error: cleanupError } = await supabase.storage.from('student-photos').remove(stalePaths);
-  if (cleanupError) console.warn('[storage] could not clean up stale photo extensions:', cleanupError.message);
+  // Then ask the bucket what else is stored for this student and remove it.
+  // Looking at the real contents (instead of assuming the previous filename)
+  // means any leftover — different extension, older naming — gets cleared, so
+  // exactly one photo per student survives.
+  const { data: listed, error: listError } = await supabase.storage
+    .from('student-photos').list('', { limit: 100, search: prefix });
+  if (listError) {
+    console.warn('[storage] could not list existing photos:', listError.message);
+  } else {
+    const stale = (listed || []).map(f => f.name).filter(n => n.startsWith(prefix) && n !== path);
+    if (stale.length) {
+      const { error: rmError } = await supabase.storage.from('student-photos').remove(stale);
+      if (rmError) console.warn('[storage] could not remove old photos:', stale.join(', '), rmError.message);
+    }
+  }
 
   const publicUrl = supabase.storage.from('student-photos').getPublicUrl(path).data.publicUrl;
-  // The path never changes, so add a version marker — otherwise the browser and
-  // CDN would keep showing the previous photo from cache.
+  // The path stays the same across replacements, so add a version marker —
+  // otherwise the browser and CDN would keep showing the cached older photo.
   return `${publicUrl}?v=${Date.now()}`;
 };
 
