@@ -135,7 +135,9 @@ export const uploadStudentPhoto = async (picture, studentId) => {
 
   // Upload first, so a failure here never loses the student's existing photo.
   const { error } = await supabase.storage.from('student-photos')
-    .upload(path, blob, { contentType: blob.type, upsert: true });
+    // cacheControl 0: the path is reused for every replacement, so without this
+    // the CDN would keep serving the previous photo for an hour.
+    .upload(path, blob, { contentType: blob.type, upsert: true, cacheControl: '0' });
   if (error) throw error;
 
   // Then ask the bucket what else is stored for this student and remove it.
