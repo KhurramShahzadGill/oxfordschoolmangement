@@ -136,6 +136,14 @@ export const uploadStudentPhoto = async (picture, studentId) => {
   const { error } = await supabase.storage.from('student-photos')
     .upload(path, blob, { contentType: blob.type, upsert: true });
   if (error) throw error;
+
+  // Guard against a previous upload having landed on a different extension
+  // (e.g. an older browser without WebP support saved .jpg) — without this,
+  // that old file would never get overwritten and would linger as an orphan.
+  const stalePaths = ['webp', 'jpg', 'png'].filter(e => e !== ext).map(e => `student-${studentId}.${e}`);
+  const { error: cleanupError } = await supabase.storage.from('student-photos').remove(stalePaths);
+  if (cleanupError) console.warn('[storage] could not clean up stale photo extensions:', cleanupError.message);
+
   const publicUrl = supabase.storage.from('student-photos').getPublicUrl(path).data.publicUrl;
   // The path never changes, so add a version marker — otherwise the browser and
   // CDN would keep showing the previous photo from cache.
