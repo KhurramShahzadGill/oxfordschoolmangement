@@ -20,6 +20,15 @@ const RequireAuth = ({ children }) => {
     let active = true;
     const resolve = async (session) => {
       if (!session) { if (active) setStatus('out'); return; }
+      // A stored session alone is not proof the account still exists — it stays
+      // in the browser even after the user is deleted or the password changes.
+      // Ask the server to confirm, and sign out if it no longer accepts it.
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data?.user) {
+        await supabase.auth.signOut();
+        if (active) setStatus('out');
+        return;
+      }
       try { await loadSchoolContext(); } catch { /* fall back to defaults */ }
       if (active) setStatus('in');
     };
