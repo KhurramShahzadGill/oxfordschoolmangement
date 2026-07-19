@@ -210,18 +210,27 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
           </div>
           <div className="form-group">
             {impLabel('picture', 'Student Picture')}
-            <input key={photoInputKey} type="file" accept="image/*" onChange={handlePicture} style={{ fontSize: '0.85rem' }} />
-            {form.picture && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+            {/* Only one control is offered at a time: a photo is either shown
+                with Remove, or the picker is available. Replacing therefore
+                always goes Remove -> upload, which is the reliable path. */}
+            {form.picture ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <img src={form.picture} alt="preview" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
-                <button
-                  type="button"
-                  onClick={removePicture}
-                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--danger)', fontSize: '0.78rem', fontWeight: 600, textDecoration: 'underline' }}
-                >
-                  Remove
-                </button>
+                <div>
+                  <button
+                    type="button"
+                    onClick={removePicture}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--danger)', fontSize: '0.78rem', fontWeight: 600, textDecoration: 'underline' }}
+                  >
+                    Remove
+                  </button>
+                  <div className="text-xs text-secondary-color" style={{ marginTop: 2 }}>
+                    Remove to upload a different photo
+                  </div>
+                </div>
               </div>
+            ) : (
+              <input key={photoInputKey} type="file" accept="image/*" onChange={handlePicture} style={{ fontSize: '0.85rem' }} />
             )}
           </div>
         </div>
