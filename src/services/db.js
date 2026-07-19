@@ -67,6 +67,7 @@ const COLUMN_TYPES = {
   student_history: { num: [],            date: ['date'],                              uuid: ['from_class_id', 'from_section_id', 'to_class_id', 'to_section_id'] },
   fees:            { num: FEE_MONEY,     date: ['paid_date'],                         uuid: [] },
   custom_charges:  { num: CHARGE_MONEY,  date: ['date_created', 'paid_date'],         uuid: [] },
+  receipts:        { num: ['amount'],    date: ['paid_date'],                         uuid: [] },
 };
 
 // Clean a payload for one table: blank numbers -> 0, blank dates/uuids -> NULL.
@@ -181,8 +182,23 @@ export const deleteStudentPhoto = async (url) => {
 
 // ========== CLASSES API ==========
 export const apiClasses = {
-  getAll: async () => rowsOf(supabase.from('classes').select('*').order('class_name'), 'classes'),
-  create: async (data) => rowOf(supabase.from('classes').insert(withSchool(prep('classes', data))).select().single(), 'classes'),
+  // Ordered the way the school arranged them, not alphabetically — a class
+  // added later (e.g. Play Group) still belongs at the position they choose.
+  getAll: async () => rowsOf(supabase.from('classes').select('*').order('sort_order').order('created_at'), 'classes'),
+  create: async (data) => {
+    // New classes go to the end; the school can drag them into place after.
+    const existing = await rowsOf(supabase.from('classes').select('sort_order'), 'classes');
+    const nextOrder = existing.reduce((mx, c) => Math.max(mx, Number(c.sort_order) || 0), 0) + 1;
+    return rowOf(supabase.from('classes').insert(withSchool(prep('classes', { ...data, sort_order: nextOrder }))).select().single(), 'classes');
+  },
+  // Persist a whole new arrangement after a drag-and-drop reorder.
+  reorder: async (orderedIds) => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      const { error } = await supabase.from('classes').update({ sort_order: i + 1 }).eq('id', orderedIds[i]);
+      if (error) throw new Error(`[classes] ${error.message}`);
+    }
+    return true;
+  },
   update: async (id, data) => rowOf(supabase.from('classes').update(prep('classes', data)).eq('id', id).select().single(), 'classes'),
   delete: async (id) => { const { error } = await supabase.from('classes').delete().eq('id', id); if (error) throw error; return true; },
 };
@@ -313,6 +329,33 @@ export const apiCustomCharges = {
   },
   update: async (id, data) => toNumbers(await rowOf(supabase.from('custom_charges').update(prep('custom_charges', data)).eq('id', id).select().single(), 'custom_charges'), CHARGE_MONEY),
   delete: async (id) => { const { error } = await supabase.from('custom_charges').delete().eq('id', id); if (error) throw error; return true; },
+};
+
+// ========== RECEIPTS API ==========
+// A receipt number must never repeat, so the running number is handed out by
+// the database (one atomic step) rather than built from the date or student id.
+export const apiReceipts = {
+  create: async ({ studentId, amount, paidDate }) => {
+    const schoolId = getSchoolId();
+    if (!schoolId) throw new Error('This login is not linked to any school, so a receipt cannot be issued.');
+
+    const { data: serial, error: rpcError } = await supabase.rpc('next_receipt_no', { p_school: schoolId });
+    if (rpcError) throw new Error(`[receipts] ${rpcError.message}`);
+
+    const name = getSettings().school_name || 'School';
+    const initials = (name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 4)) || 'SCH';
+    const receiptNo = `${initials}-${String(serial).padStart(6, '0')}`;
+
+    await rowOf(supabase.from('receipts').insert(withSchool(prep('receipts', {
+      receipt_no: receiptNo,
+      student_id: studentId,
+      amount,
+      paid_date: paidDate || new Date().toISOString().split('T')[0],
+    }))).select().single(), 'receipts');
+
+    return receiptNo;
+  },
+  getAll: async () => mapMoney(await rowsOf(supabase.from('receipts').select('*').order('created_at', { ascending: false }), 'receipts'), ['amount']),
 };
 
 // ========== SCHOOL SETTINGS (per-school, from the schools table) ==========

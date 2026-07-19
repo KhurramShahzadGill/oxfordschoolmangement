@@ -108,6 +108,35 @@ export default function Classes() {
     }
   };
 
+  // ===== Drag & drop ordering =====
+  // Classes keep the order the school arranged them in, so a class added later
+  // (Play Group, for example) can still sit at the top.
+  const [dragId, setDragId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+
+  const handleDrop = async (targetId) => {
+    const fromId = dragId;
+    setDragId(null);
+    setDragOverId(null);
+    if (!fromId || fromId === targetId) return;
+
+    const ids = classes.map(c => c.id);
+    const from = ids.indexOf(fromId);
+    const to = ids.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+
+    ids.splice(to, 0, ids.splice(from, 1)[0]);
+    // Show the new order straight away, then save it.
+    setClasses(ids.map(id => classes.find(c => c.id === id)));
+    try {
+      await apiClasses.reorder(ids);
+      loadData();
+    } catch (err) {
+      alert('Could not save the new order:\n\n' + err.message);
+      loadData();
+    }
+  };
+
   const toggleExpand = (classId) => {
     setExpandedClass(expandedClass === classId ? null : classId);
     setShowSectionForm(null);
@@ -117,12 +146,15 @@ export default function Classes() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <h1 className="text-2xl font-bold">Class & Section Management</h1>
         <button className="btn btn-primary" onClick={() => { setShowClassForm(!showClassForm); setEditingClassId(null); setClassForm({ class_name: '' }); }}>
           <Plus size={16} /> Add Class
         </button>
       </div>
+      <p className="text-xs text-secondary-color" style={{ marginBottom: 24 }}>
+        Classes stay in the order you arrange them — drag <span style={{ fontSize: 14 }}>⠿</span> to move a class up or down.
+      </p>
 
       {/* Add/Edit Class Form */}
       {showClassForm && (
@@ -159,7 +191,21 @@ export default function Classes() {
               const isExpanded = expandedClass === c.id;
 
               return (
-                <div key={c.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <div
+                  key={c.id}
+                  draggable
+                  onDragStart={() => setDragId(c.id)}
+                  onDragOver={e => { e.preventDefault(); if (dragOverId !== c.id) setDragOverId(c.id); }}
+                  onDragLeave={() => setDragOverId(null)}
+                  onDrop={() => handleDrop(c.id)}
+                  onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                  style={{
+                    borderBottom: '1px solid var(--border-color)',
+                    borderTop: dragOverId === c.id && dragId !== c.id ? '2px solid var(--primary)' : '2px solid transparent',
+                    opacity: dragId === c.id ? 0.5 : 1,
+                    background: dragOverId === c.id && dragId !== c.id ? 'var(--bg-primary)' : 'transparent',
+                  }}
+                >
                   {/* Class Row */}
                   <div
                     style={{
@@ -171,6 +217,7 @@ export default function Classes() {
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span title="Drag to reorder" style={{ cursor: 'grab', color: 'var(--text-secondary)', fontSize: 16, lineHeight: 1 }}>⠿</span>
                       {isExpanded ? <ChevronDown size={18} color="var(--primary)" /> : <ChevronRight size={18} color="var(--text-secondary)" />}
                       <span className="font-semibold">{c.class_name}</span>
                       <span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>
