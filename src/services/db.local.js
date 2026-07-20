@@ -38,6 +38,15 @@ const fuzzyNameMatch = (name, query) => {
   return normalize(n).includes(normalize(q)) || normalize(q).includes(normalize(n));
 };
 
+// Same fee rule as the cloud layer, so a promotion behaves identically in the demo.
+export const newMonthlyFee = (current, mode, value) => {
+  const cur = Math.round(Number(current) || 0);
+  const val = Number(value) || 0;
+  if (mode === 'percent') return Math.max(0, Math.round(cur * (1 + val / 100)));
+  if (mode === 'amount') return Math.max(0, cur + Math.round(val));
+  return cur;
+};
+
 export const ADMISSION_HEADS = [
   { key: 'admission_fee',  label: 'Admission Fee' },
   { key: 'security_fee',   label: 'Security Fee' },
@@ -245,6 +254,33 @@ export const apiStudents = {
     rows[i] = { ...rows[i], class_id: toClassId, section_id: toSectionId };
     write('students', rows);
     return rows[i];
+  },
+  bulkPromote: async ({ studentIds, toClassId, toSectionId, feeMode = 'none', feeValue = 0 }) => {
+    if (!studentIds?.length) return { promoted: 0 };
+    const rows = read('students');
+    const history = read('student_history');
+    const today = new Date().toISOString().split('T')[0];
+    let promoted = 0;
+
+    studentIds.forEach(id => {
+      const i = rows.findIndex(r => r.id === id);
+      if (i === -1) return;
+      history.push({
+        id: uid(), student_id: id,
+        from_class_id: rows[i].class_id, from_section_id: rows[i].section_id,
+        to_class_id: toClassId, to_section_id: toSectionId,
+        date: today, type: 'promotion',
+      });
+      rows[i] = {
+        ...rows[i], class_id: toClassId, section_id: toSectionId,
+        monthly_fee: newMonthlyFee(rows[i].monthly_fee, feeMode, feeValue),
+      };
+      promoted++;
+    });
+
+    write('student_history', history);
+    write('students', rows);
+    return { promoted };
   },
 };
 

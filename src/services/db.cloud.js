@@ -301,6 +301,52 @@ export const apiStudents = {
     if (hErr) throw hErr;
     return rowOf(supabase.from('students').update({ class_id: toClassId, section_id: toSectionId }).eq('id', studentId).select().single());
   },
+
+  // Move a whole class up in one go. Each student still gets their own history
+  // row, so an individual record stays as traceable as a one-by-one promotion.
+  bulkPromote: async ({ studentIds, toClassId, toSectionId, feeMode = 'none', feeValue = 0 }) => {
+    if (!studentIds?.length) return { promoted: 0 };
+
+    const students = await rowsOf(
+      supabase.from('students').select('id,class_id,section_id,monthly_fee').in('id', studentIds), 'students');
+
+    const today = new Date().toISOString().split('T')[0];
+    const history = students.map(s => withSchool(prep('student_history', {
+      student_id: s.id,
+      from_class_id: s.class_id, from_section_id: s.section_id,
+      to_class_id: toClassId, to_section_id: toSectionId,
+      date: today, type: 'promotion',
+    })));
+    const { error: hErr } = await supabase.from('student_history').insert(history);
+    if (hErr) throw new Error(`[student_history] ${hErr.message}`);
+
+    if (feeMode === 'none') {
+      // Same new fee for everyone means a single update is enough.
+      const { error } = await supabase.from('students')
+        .update({ class_id: toClassId, section_id: toSectionId }).in('id', studentIds);
+      if (error) throw new Error(`[students] ${error.message}`);
+    } else {
+      // Each student's new fee is based on their own current fee.
+      for (const s of students) {
+        const { error } = await supabase.from('students').update({
+          class_id: toClassId, section_id: toSectionId,
+          monthly_fee: newMonthlyFee(s.monthly_fee, feeMode, feeValue),
+        }).eq('id', s.id);
+        if (error) throw new Error(`[students] ${error.message}`);
+      }
+    }
+    return { promoted: students.length };
+  },
+};
+
+// Fee for the next class. Schools usually raise fees for a whole class either
+// by a percentage or by a fixed amount, then adjust individual students by hand.
+export const newMonthlyFee = (current, mode, value) => {
+  const cur = Math.round(Number(current) || 0);
+  const val = Number(value) || 0;
+  if (mode === 'percent') return Math.max(0, Math.round(cur * (1 + val / 100)));
+  if (mode === 'amount') return Math.max(0, cur + Math.round(val));
+  return cur;
 };
 
 // ========== STUDENT HISTORY API ==========

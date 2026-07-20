@@ -27,6 +27,7 @@ export const clearSchoolContext = impl.clearSchoolContext;
 
 export const ADMISSION_HEADS    = impl.ADMISSION_HEADS;
 export const peekNextStudentId  = impl.peekNextStudentId;
+export const newMonthlyFee      = impl.newMonthlyFee;
 
 export const uploadStudentPhoto = impl.uploadStudentPhoto;
 export const deleteStudentPhoto = impl.deleteStudentPhoto;

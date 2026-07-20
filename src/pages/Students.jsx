@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, deleteStudentPhoto, ADMISSION_HEADS } from '../services/db';
-import { Plus, Edit2, Trash2, Eye, FileSpreadsheet, Printer, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, apiFees, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, deleteStudentPhoto, ADMISSION_HEADS } from '../services/db';
+import { Plus, Edit2, Trash2, Eye, FileSpreadsheet, Printer, X, AlertTriangle, CheckCircle2, GraduationCap } from 'lucide-react';
 import { differenceInYears, parseISO, format } from 'date-fns';
 import StudentForm from '../components/StudentForm';
 import StudentProfile from '../components/StudentProfile';
 import StudentCard from '../components/StudentCard';
 import FamilySearch from '../components/FamilySearch';
+import PromoteClassModal from '../components/PromoteClassModal';
 import { getMissingFields, ADMISSION_FIELD_GROUPS } from '../utils/completeness';
 import * as XLSX from 'xlsx';
 
@@ -192,6 +193,7 @@ export default function Students() {
   const [showMissingModal, setShowMissingModal] = useState(false);
   const [printMissing, setPrintMissing] = useState(false);
   const [printBlankForm, setPrintBlankForm] = useState(false);
+  const [showPromote, setShowPromote] = useState(false);
 
   // Export / Print States
   const [printStudentList, setPrintStudentList] = useState(false);
@@ -372,6 +374,40 @@ export default function Students() {
   const incompleteCount = incompleteRows.length;
   const tableRows = showIncompleteOnly ? incompleteRows.map(r => r.s) : filtered;
 
+  // Unpaid dues per student, loaded only when the promotion screen opens so the
+  // Students page itself stays light. Mirrors the Fee page's calculation:
+  // every month from the fee start date, plus any outstanding one-time charges.
+  const [promoDues, setPromoDues] = useState({});
+  const openPromote = async () => {
+    setShowPromote(true);
+    try {
+      const [fees, charges] = await Promise.all([apiFees.getAll(), apiCustomCharges.getAll()]);
+      const thisMonth = format(new Date(), 'yyyy-MM');
+      const dues = {};
+      students.forEach(s => {
+        let owed = 0;
+        let m = s.fee_start_month;
+        while (m && m <= thisMonth) {
+          const rec = fees.find(f => f.student_id === s.id && f.month === m);
+          const due = Number(rec?.monthly_fee ?? s.monthly_fee ?? 0)
+            + Number(rec?.fine || 0) + Number(rec?.paper_fund || 0) + Number(rec?.other_charges || 0);
+          const balance = due - Number(rec?.amount_paid || 0);
+          if (balance > 0) owed += balance;
+          const [y, mo] = m.split('-').map(Number);
+          m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`;
+        }
+        charges.filter(c => c.student_id === s.id).forEach(c => {
+          const balance = Number(c.amount || 0) - Number(c.amount_paid || 0);
+          if (balance > 0) owed += balance;
+        });
+        dues[s.id] = owed;
+      });
+      setPromoDues(dues);
+    } catch {
+      setPromoDues({}); // the warning is a bonus; never block promotion over it
+    }
+  };
+
   const handlePrintMissing = () => {
     setShowMissingModal(false);
     setPrintMissing(true);
@@ -503,6 +539,13 @@ export default function Students() {
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-secondary)', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
             >
               <Printer size={15} /> ID Cards ({filtered.length})
+            </button>
+            <button
+              onClick={openPromote}
+              title="Move a whole class up to the next class"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-secondary)', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontSize: '0.875rem' }}
+            >
+              <GraduationCap size={15} /> Promote Class
             </button>
             {/* Blank admission form to print / send home */}
             <button
@@ -699,6 +742,17 @@ export default function Students() {
         onPrint={handlePrintList}
         onExcel={handleExportExcel}
         filterSummary={filterSummaryText}
+      />
+
+      {/* Promote a whole class */}
+      <PromoteClassModal
+        isOpen={showPromote}
+        onClose={() => setShowPromote(false)}
+        students={students}
+        classes={classes}
+        sections={sections}
+        outstandingOf={(s) => promoDues[s.id] || 0}
+        onDone={loadData}
       />
 
       {/* Missing Info Modal */}
