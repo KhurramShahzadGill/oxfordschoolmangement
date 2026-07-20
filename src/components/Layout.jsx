@@ -9,8 +9,9 @@ import {
   Settings as SettingsIcon,
   LogOut
 } from 'lucide-react';
-import { getSettings, clearSchoolContext } from '../services/db';
+import { getSettings, clearSchoolContext, resetDemoData } from '../services/db';
 import { supabase } from '../services/supabase';
+import { IS_DEMO } from '../services/demo';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -20,6 +21,12 @@ export default function Layout() {
     await supabase.auth.signOut();
     clearSchoolContext();
     navigate('/login');
+  };
+
+  const handleResetDemo = () => {
+    if (!window.confirm('Clear all demo data and start fresh?\n\nThis only affects this browser.')) return;
+    resetDemoData();
+    window.location.reload();
   };
 
   return (
@@ -57,24 +64,42 @@ export default function Layout() {
           </NavLink>
         </nav>
         
-        <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)' }}>
-          <button 
-            onClick={handleLogout}
-            style={{ width: '100%', background: 'transparent', color: 'var(--text-secondary)', border: 'none', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', cursor: 'pointer', fontWeight: 500 }}
-          >
-            <LogOut size={20} />
-            Logout
-          </button>
-        </div>
+        {/* The demo has no accounts, so there is nothing to log out of. */}
+        {!IS_DEMO && (
+          <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)' }}>
+            <button
+              onClick={handleLogout}
+              style={{ width: '100%', background: 'transparent', color: 'var(--text-secondary)', border: 'none', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', cursor: 'pointer', fontWeight: 500 }}
+            >
+              <LogOut size={20} />
+              Logout
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
       <main className="main-content">
         {/* Header */}
         <header className="top-header no-print">
-          <div style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>
-            Welcome back, Admin
-          </div>
+          {IS_DEMO ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: 999, padding: '4px 12px', fontSize: '0.75rem', fontWeight: 700 }}>
+                DEMO
+              </span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Try anything you like — this data stays in your browser only.
+              </span>
+              <button onClick={handleResetDemo}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--primary)', fontSize: '0.78rem', fontWeight: 600, textDecoration: 'underline' }}>
+                Reset demo
+              </button>
+            </div>
+          ) : (
+            <div style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Welcome back, Admin
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
               A

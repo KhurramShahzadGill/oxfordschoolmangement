@@ -10,13 +10,17 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { supabase } from './services/supabase';
 import { loadSchoolContext } from './services/db';
+import { IS_DEMO } from './services/demo';
 
 // Auth guard — allows access only when a Supabase session exists, and loads
 // the user's school (branding + settings) before showing the app.
+// The demo has no accounts at all: its data never leaves the visitor's browser,
+// so there is nothing to protect and nothing to sign in to.
 const RequireAuth = ({ children }) => {
-  const [status, setStatus] = useState('loading'); // 'loading' | 'in' | 'out'
+  const [status, setStatus] = useState(IS_DEMO ? 'in' : 'loading'); // 'loading' | 'in' | 'out'
 
   useEffect(() => {
+    if (IS_DEMO) return;
     let active = true;
     const resolve = async (session) => {
       if (!session) { if (active) setStatus('out'); return; }
