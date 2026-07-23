@@ -36,7 +36,7 @@ const C = {
   light: '#f1f5f9',
 };
 
-function VoucherTemplate({ student, fee, arrears, parent, className, sectionName, breakdown, copyLabel, infoOnly }) {
+function VoucherTemplate({ student, fee, arrears, parent, className, sectionName, breakdown, copyLabel, infoOnly, receiptNo }) {
   const SCHOOL = getSettings();
   const receivedTotal = Number(fee?.amount_paid || 0);
 
@@ -50,8 +50,9 @@ function VoucherTemplate({ student, fee, arrears, parent, className, sectionName
   const balance = grandTotalPayable - receivedTotal;
 
   const issueDate = fee?.paid_date ? format(parseISO(fee.paid_date), 'dd MMM yyyy') : format(new Date(), 'dd MMM yyyy');
-  const initials = (SCHOOL.school_name || 'SCH').split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 4);
-  const challanNo = `${initials}/${student.id || '—'}/${format(new Date(), 'yyMMdd')}`;
+  // The receipt number is issued and stored when the payment is recorded, so it
+  // is unique and never repeats. An information copy has no number to show.
+  const challanNo = receiptNo || (infoOnly ? '—' : '—');
   const period = fee?.month ? fmtM(fee.month) : '—';
 
   const cell = { border: C.border, padding: '3px 7px', fontSize: '10px', verticalAlign: 'middle' };

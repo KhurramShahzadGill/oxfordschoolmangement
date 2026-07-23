@@ -5,21 +5,35 @@ import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
 import Parents from './pages/Parents';
 import Classes from './pages/Classes';
+import Promotion from './pages/Promotion';
 import Fees from './pages/Fees';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { supabase } from './services/supabase';
 import { loadSchoolContext } from './services/db';
+import { IS_DEMO } from './services/demo';
 
 // Auth guard — allows access only when a Supabase session exists, and loads
 // the user's school (branding + settings) before showing the app.
+// The demo has no accounts at all: its data never leaves the visitor's browser,
+// so there is nothing to protect and nothing to sign in to.
 const RequireAuth = ({ children }) => {
-  const [status, setStatus] = useState('loading'); // 'loading' | 'in' | 'out'
+  const [status, setStatus] = useState(IS_DEMO ? 'in' : 'loading'); // 'loading' | 'in' | 'out'
 
   useEffect(() => {
+    if (IS_DEMO) return;
     let active = true;
     const resolve = async (session) => {
       if (!session) { if (active) setStatus('out'); return; }
+      // A stored session alone is not proof the account still exists — it stays
+      // in the browser even after the user is deleted or the password changes.
+      // Ask the server to confirm, and sign out if it no longer accepts it.
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data?.user) {
+        await supabase.auth.signOut();
+        if (active) setStatus('out');
+        return;
+      }
       try { await loadSchoolContext(); } catch { /* fall back to defaults */ }
       if (active) setStatus('in');
     };
@@ -52,6 +66,7 @@ function App() {
           <Route path="students" element={<Students />} />
           <Route path="parents" element={<Parents />} />
           <Route path="classes" element={<Classes />} />
+          <Route path="promotion" element={<Promotion />} />
           <Route path="fees" element={<Fees />} />
           <Route path="settings" element={<Settings />} />
         </Route>

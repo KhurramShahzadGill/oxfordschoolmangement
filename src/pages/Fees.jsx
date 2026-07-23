@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFees, apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings } from '../services/db';
+import { apiFees, apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, apiReceipts, getSettings } from '../services/db';
 import { X, ChevronDown, ChevronRight, Receipt, Printer, History, FileSpreadsheet } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import FeeVoucher from '../components/FeeVoucher';
@@ -487,7 +487,7 @@ export default function Fees() {
     loadData();
   };
 
-  const handlePrint = (student, items, infoOnly = false) => {
+  const handlePrint = async (student, items, infoOnly = false) => {
     const monthlyItems = items.filter(i => !i.isCustom);
     const months = [...new Set(monthlyItems.map(i => i.month))];
     const primaryMonth = months[months.length - 1] || curMonth;
@@ -521,14 +521,27 @@ export default function Fees() {
       }
     });
 
+    const amountPaid = items.reduce((s, i) => s + Number(i.paying), 0);
     const feeData = {
       month: primaryMonth,
       paid_date: format(new Date(), 'yyyy-MM-dd'),
-      amount_paid: items.reduce((s, i) => s + Number(i.paying), 0),
+      amount_paid: amountPaid,
       breakdown: items
     };
 
-    setPrintData({ student, fee: feeData, arrears: allUnpaid, month: primaryMonth, infoOnly });
+    // Issue a real receipt number for an actual payment. The information copy
+    // is not a payment, so it must not consume a number.
+    let receiptNo = '';
+    if (!infoOnly) {
+      try {
+        receiptNo = await apiReceipts.create({ studentId: student.id, amount: amountPaid });
+      } catch (err) {
+        alert('Could not issue a receipt number:\n\n' + err.message);
+        return;
+      }
+    }
+
+    setPrintData({ student, fee: feeData, arrears: allUnpaid, month: primaryMonth, infoOnly, receiptNo });
     setTimeout(() => window.print(), 300);
     setTimeout(() => setPrintData(null), 1000);
   };
@@ -929,6 +942,7 @@ export default function Fees() {
           sectionName={getSection(printData.student.section_id)?.section_name}
           breakdown={printData.fee.breakdown}
           infoOnly={printData.infoOnly}
+          receiptNo={printData.receiptNo}
         />
       )}
 

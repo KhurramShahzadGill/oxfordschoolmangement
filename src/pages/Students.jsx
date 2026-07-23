@@ -685,7 +685,7 @@ export default function Students() {
 
       {/* Student Profile Modal */}
       {profileId && (
-        <StudentProfile studentId={profileId} onClose={() => setProfileId(null)} onUpdate={loadData} />
+        <StudentProfile studentId={profileId} onClose={() => setProfileId(null)} />
       )}
 
       {/* Export Modal */}
