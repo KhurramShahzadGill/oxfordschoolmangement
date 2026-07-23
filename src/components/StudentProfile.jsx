@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { apiStudents, apiClasses, apiSections, apiStudentHistory, apiParents, apiFees, apiCustomCharges, getSettings } from '../services/db';
 import { differenceInYears, parseISO, format } from 'date-fns';
 import { formatDate } from '../utils/formatters';
-import { ArrowUpRight, History, X, IdCard } from 'lucide-react';
+import { History, X, IdCard } from 'lucide-react';
 import StudentCard from './StudentCard';
 
-export default function StudentProfile({ studentId, onClose, onUpdate }) {
+// Read-only record of one student. Moving a student to another class is not
+// done here — that is the Promotion module's job, in bulk or one by one.
+export default function StudentProfile({ studentId, onClose }) {
   const [student, setStudent] = useState(null);
   const [parent, setParent] = useState(null);
   const [classes, setClasses] = useState([]);
@@ -13,9 +15,6 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
   const [history, setHistory] = useState([]);
   const [fees, setFees] = useState([]);
   const [charges, setCharges] = useState([]);
-  const [showPromotion, setShowPromotion] = useState(false);
-  const [promoClass, setPromoClass] = useState('');
-  const [promoSection, setPromoSection] = useState('');
   const [printCard, setPrintCard] = useState(false);
   const [printProfile, setPrintProfile] = useState(false);
   
@@ -82,16 +81,6 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
     });
     return { totalDue, totalPaid, outstanding, totalOutstanding: Math.max(0, totalDue - totalPaid) };
   })();
-  const promoSections = sections.filter(s => s.class_id === promoClass);
-
-  const handlePromote = async () => {
-    if (!promoClass || !promoSection) return alert('Select class and section');
-    await apiStudents.promote(student.id, promoClass, promoSection);
-    setShowPromotion(false);
-    load();
-    if (onUpdate) onUpdate();
-  };
-
   const handlePrint = () => {
     setPrintCard(true);
     document.body.classList.add('print-mode');
@@ -210,35 +199,6 @@ export default function StudentProfile({ studentId, onClose, onUpdate }) {
                     <span style={{ fontWeight: 700, color: '#dc2626' }}>Rs. {o.amount.toLocaleString()}</span>
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
-
-          {/* Promotion */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--primary)', textTransform: 'uppercase' }}>Class Promotion</h3>
-              <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => setShowPromotion(!showPromotion)}>
-                <ArrowUpRight size={14} /> Promote
-              </button>
-            </div>
-            {showPromotion && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', background: 'var(--bg-primary)', padding: 12, borderRadius: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label text-xs">New Class</label>
-                  <select className="form-select" style={{ padding: '8px 10px', fontSize: '0.85rem' }} value={promoClass} onChange={e => { setPromoClass(e.target.value); setPromoSection(''); }}>
-                    <option value="">Select</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.class_name}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label text-xs">New Section</label>
-                  <select className="form-select" style={{ padding: '8px 10px', fontSize: '0.85rem' }} value={promoSection} onChange={e => setPromoSection(e.target.value)}>
-                    <option value="">Select</option>
-                    {promoSections.map(s => <option key={s.id} value={s.id}>{s.section_name}</option>)}
-                  </select>
-                </div>
-                <button className="btn btn-primary" style={{ padding: '8px 14px', fontSize: '0.8rem' }} onClick={handlePromote}>Confirm</button>
               </div>
             )}
           </div>

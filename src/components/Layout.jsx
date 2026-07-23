@@ -5,6 +5,7 @@ import {
   Users,
   UserSquare2,
   BookOpen,
+  GraduationCap,
   Receipt,
   Settings as SettingsIcon,
   LogOut
@@ -53,6 +54,10 @@ export default function Layout() {
           <NavLink to="/classes" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <BookOpen size={20} />
             Classes
+          </NavLink>
+          <NavLink to="/promotion" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+            <GraduationCap size={20} />
+            Promotion
           </NavLink>
           <NavLink to="/fees" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Receipt size={20} />

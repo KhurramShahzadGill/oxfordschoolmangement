@@ -354,6 +354,11 @@ export const apiStudentHistory = {
   getByStudentId: async (studentId) => rowsOf(
     supabase.from('student_history').select('*').eq('student_id', studentId).order('date', { ascending: false })
   ),
+  // Latest moves across the whole school — the Promotion module's activity log.
+  getRecent: async (limit = 20) => rowsOf(
+    supabase.from('student_history').select('*').order('date', { ascending: false }).limit(limit),
+    'student_history'
+  ),
 };
 
 // ========== FEES API ==========

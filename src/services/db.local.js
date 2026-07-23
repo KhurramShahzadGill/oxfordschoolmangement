@@ -289,6 +289,10 @@ export const apiStudentHistory = {
   getByStudentId: async (studentId) => read('student_history')
     .filter(h => h.student_id === studentId)
     .sort((a, b) => new Date(b.date) - new Date(a.date)),
+  // Latest moves across the whole school — the Promotion module's activity log.
+  getRecent: async (limit = 20) => read('student_history')
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, limit),
 };
 
 // ===== FEES =====

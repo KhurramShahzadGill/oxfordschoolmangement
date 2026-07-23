@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
 import Parents from './pages/Parents';
 import Classes from './pages/Classes';
+import Promotion from './pages/Promotion';
 import Fees from './pages/Fees';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
@@ -65,6 +66,7 @@ function App() {
           <Route path="students" element={<Students />} />
           <Route path="parents" element={<Parents />} />
           <Route path="classes" element={<Classes />} />
+          <Route path="promotion" element={<Promotion />} />
           <Route path="fees" element={<Fees />} />
           <Route path="settings" element={<Settings />} />
         </Route>
