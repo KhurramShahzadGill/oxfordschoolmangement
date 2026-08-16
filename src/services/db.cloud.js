@@ -13,6 +13,7 @@
 
 import { supabase } from './supabase';
 import { DEFAULT_IMPORTANT_KEYS } from '../utils/completeness';
+import { findParentByCnic } from '../utils/cnic';
 
 // ===== School context (multi-tenant) =====
 // After login we load the logged-in user's school row once and cache it.
@@ -236,9 +237,15 @@ export const apiParents = {
     // Match on CNIC when it is provided; otherwise fall back to father's name +
     // contact. Without that fallback a blank CNIC created a brand new parent on
     // every save attempt. RLS keeps these lookups inside the current school.
+    //
+    // The CNIC lookup runs in JS over the school's parents rather than as an
+    // .eq filter, so a family is still recognised when the stored CNIC was
+    // typed or imported with different spacing/dashes, and so a mother's own
+    // CNIC finds the family just as a father's does.
     let existing = null;
-    if (data.father_cnic) {
-      existing = await rowOf(supabase.from('parents').select('*').eq('father_cnic', data.father_cnic).maybeSingle(), 'parents');
+    if (data.father_cnic || data.mother_cnic) {
+      const all = await rowsOf(supabase.from('parents').select('*'), 'parents');
+      existing = findParentByCnic(all, data.father_cnic, data.mother_cnic);
     } else if (data.father_name && data.father_contact) {
       const rows = await rowsOf(
         supabase.from('parents').select('*')

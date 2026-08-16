@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiStudents, apiParents, apiClasses, apiSections, apiCustomCharges, getSettings, getImportantFields, peekNextStudentId, uploadStudentPhoto, deleteStudentPhoto, ADMISSION_HEADS } from '../services/db';
 import { Plus, Edit2, Trash2, Eye, FileSpreadsheet, Printer, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { differenceInYears, parseISO, format } from 'date-fns';
@@ -6,7 +6,8 @@ import StudentForm from '../components/StudentForm';
 import StudentProfile from '../components/StudentProfile';
 import StudentCard from '../components/StudentCard';
 import FamilySearch from '../components/FamilySearch';
-import { getMissingFields, ADMISSION_FIELD_GROUPS } from '../utils/completeness';
+import { getMissingFields, ADMISSION_FIELD_GROUPS, RELIGIONS } from '../utils/completeness';
+import { findParentByCnic, describeParent } from '../utils/cnic';
 import * as XLSX from 'xlsx';
 
 /* ───────── Column Groups for Export Modal ───────── */
@@ -35,14 +36,15 @@ const STUDENT_COL_GROUPS = [
     columns: [
       { key: 'dob',          label: 'Date of Birth' },
       { key: 'age',          label: 'Age' },
+      { key: 'religion',     label: 'Religion' },
       { key: 'medical_info', label: 'Medical Info' },
     ],
   },
   {
     label: 'Father Info',
     columns: [
-      { key: 'father_name',       label: 'Father Name' },
       { key: 'father_cnic',       label: 'Father CNIC' },
+      { key: 'father_name',       label: 'Father Name' },
       { key: 'father_contact',    label: 'Father Contact' },
       { key: 'father_occupation', label: 'Father Occupation' },
       { key: 'address',           label: 'Address' },
@@ -51,9 +53,10 @@ const STUDENT_COL_GROUPS = [
   {
     label: 'Mother Info',
     columns: [
-      { key: 'mother_name',    label: 'Mother Name' },
-      { key: 'mother_cnic',    label: 'Mother CNIC' },
-      { key: 'mother_contact', label: 'Mother Contact' },
+      { key: 'mother_cnic',       label: 'Mother CNIC' },
+      { key: 'mother_name',       label: 'Mother Name' },
+      { key: 'mother_contact',    label: 'Mother Contact' },
+      { key: 'mother_occupation', label: 'Mother Occupation' },
     ],
   },
   {
@@ -167,6 +170,61 @@ function ExportModal({ isOpen, onClose, title, columnGroups, selectedCols, onCol
   );
 }
 
+/* ───────── Religion filter (pick any number at once) ─────────
+   A plain <select> can only hold one value, and the school needs to see, say,
+   Christian + Hindu together. So this is a checkbox list behind a button that
+   reports what is currently chosen. Empty selection = no filter at all. */
+function ReligionFilter({ selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    const onDocClick = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const toggle = (r) => onChange(selected.includes(r) ? selected.filter(x => x !== r) : [...selected, r]);
+
+  const label = selected.length === 0 ? 'Religion'
+    : selected.length === 1 ? selected[0]
+    : `${selected.length} religions`;
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative', flex: 1, minWidth: 130 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="form-select"
+        style={{ width: '100%', padding: '10px 14px', textAlign: 'left', cursor: 'pointer', background: 'var(--bg-secondary)', color: selected.length ? 'var(--text-primary)' : 'inherit', fontWeight: selected.length ? 600 : 400 }}
+      >
+        {label}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: 'white', border: '1px solid var(--border-color)', borderRadius: 10, boxShadow: '0 12px 30px rgba(0,0,0,0.15)', zIndex: 60, padding: 6, minWidth: 170 }}>
+          {RELIGIONS.map(r => (
+            <label key={r} onClick={() => toggle(r)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', cursor: 'pointer', fontSize: '0.82rem', borderRadius: 6 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <div style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, background: selected.includes(r) ? 'var(--primary)' : 'white', border: `1.5px solid ${selected.includes(r) ? 'var(--primary)' : '#cbd5e1'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {selected.includes(r) && <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5 3.5-4" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              </div>
+              <span style={{ userSelect: 'none' }}>{r}</span>
+            </label>
+          ))}
+          {selected.length > 0 && (
+            <button type="button" onClick={() => onChange([])}
+              style={{ width: '100%', marginTop: 4, padding: '6px 8px', background: 'none', border: 'none', borderTop: '1px solid var(--border-color)', color: 'var(--primary)', fontWeight: 600, fontSize: '0.76rem', cursor: 'pointer' }}>
+              Clear selection
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ───────── Main Students Component ───────── */
 export default function Students() {
   const [students, setStudents] = useState([]);
@@ -184,6 +242,7 @@ export default function Students() {
   const [filterClass, setFilterClass] = useState('');
   const [filterSection, setFilterSection] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterReligions, setFilterReligions] = useState([]);
   const [ageFrom, setAgeFrom] = useState('');
   const [ageTo, setAgeTo] = useState('');
 
@@ -199,9 +258,9 @@ export default function Students() {
   const [printCols, setPrintCols] = useState({
     id: true, roll_no: true, name: true, status: true, gender: false,
     class: true, section: true, admission_date: false, leaving_date: false,
-    dob: false, age: false, medical_info: false,
+    dob: false, age: false, religion: false, medical_info: false,
     father_name: false, father_cnic: false, father_contact: false, father_occupation: false,
-    mother_name: false, mother_cnic: false, mother_contact: false,
+    mother_name: false, mother_cnic: false, mother_contact: false, mother_occupation: false,
     monthly_fee: true, fee_start_month: false, address: false
   });
 
@@ -228,20 +287,38 @@ export default function Students() {
     }
 
     const parentData = {
-      father_name: form.father_name, father_cnic: form.father_cnic,
-      father_occupation: form.father_occupation, father_contact: form.father_contact,
-      mother_name: form.mother_name, mother_cnic: form.mother_cnic, mother_contact: form.mother_contact,
+      father_cnic: form.father_cnic, father_name: form.father_name,
+      father_contact: form.father_contact, father_occupation: form.father_occupation,
+      mother_cnic: form.mother_cnic, mother_name: form.mother_name,
+      mother_contact: form.mother_contact, mother_occupation: form.mother_occupation,
     };
+
+    // A CNIC belongs to one person only, so it — not the form's link — has the
+    // final say on which family this student joins. Resolving it here as well
+    // as in the form means no code path can end up with the same CNIC on two
+    // parent records, which is what would silently split a family in two.
+    const cnicOwner = findParentByCnic(parents, form.father_cnic, form.mother_cnic);
+    if (cnicOwner && form.parent_id && cnicOwner.id !== form.parent_id) {
+      alert(`This CNIC is already registered to another family:\n\n${describeParent(cnicOwner)}\n\nRe-type the CNIC in the form to link this student to that family, or correct it before saving.`);
+      return;
+    }
+    const linkedParentId = form.parent_id || cnicOwner?.id || '';
+    // Editing may move a student to a different family; remember where they came
+    // from so an emptied-out parent record can be cleaned up afterwards.
+    const previousParentId = editData?.parent_id || '';
+
     // Everything below runs inside one try/catch. If the student save fails we
     // undo the parent we created for it, so a retry cannot pile up duplicates.
     let parent;
     let createdParentId = null;
 
     try {
-      // If linked to an existing parent (sibling, or editing) reuse that record;
-      // otherwise find-or-create. This avoids duplicate parent records.
-      if (form.parent_id) {
-        parent = await apiParents.update(form.parent_id, parentData);
+      // Reuse the family record whenever we already know it (sibling, edit, or
+      // matched by CNIC): updating it here is exactly what pushes a parent
+      // correction out to every other child of that family. Only a genuinely
+      // new family falls through to find-or-create.
+      if (linkedParentId) {
+        parent = await apiParents.update(linkedParentId, parentData);
       } else {
         const res = await apiParents.createOrGet(parentData);
         parent = res.parent;
@@ -253,7 +330,8 @@ export default function Students() {
       const removedPhoto = !!editData?.picture && !form.picture;
       const studentData = {
         roll_no: form.roll_no, name: form.name, dob: form.dob,
-        gender: form.gender, admission_date: form.admission_date, leaving_date: form.leaving_date,
+        gender: form.gender, religion: form.religion,
+        admission_date: form.admission_date, leaving_date: form.leaving_date,
         medical_info: form.medical_info, monthly_fee: Number(form.monthly_fee) || 0, fee_start_month: form.fee_start_month,
         admission_fee: form.admission_fee, security_fee: form.security_fee, paper_fund: form.paper_fund,
         stationery_fee: form.stationery_fee, other_fee: form.other_fee,
@@ -292,6 +370,18 @@ export default function Students() {
         }
       }
 
+      // Moved to another family and nobody is left behind — offer to clear the
+      // empty record so it stops showing up in searches and parent lists.
+      if (previousParentId && previousParentId !== parent.id) {
+        const stillThere = students.filter(s => s.parent_id === previousParentId && s.id !== editData.id);
+        if (stillThere.length === 0) {
+          const old = parents.find(p => p.id === previousParentId);
+          if (window.confirm(`${describeParent(old)} now has no enrolled children.\n\nDelete that empty parent record?\n\nOK = delete it | Cancel = keep it`)) {
+            try { await apiParents.delete(previousParentId); } catch { /* best effort */ }
+          }
+        }
+      }
+
       setShowForm(false); setEditData(null); loadData();
     } catch (err) {
       // Undo a parent that was created only for this failed save.
@@ -306,9 +396,11 @@ export default function Students() {
     const p = parents.find(pr => pr.id === s.parent_id);
     setEditData({
       ...s,
-      father_name: p?.father_name || '', father_cnic: p?.father_cnic || '',
-      father_occupation: p?.father_occupation || '', father_contact: p?.father_contact || '',
-      mother_name: p?.mother_name || '', mother_cnic: p?.mother_cnic || '', mother_contact: p?.mother_contact || '',
+      father_cnic: p?.father_cnic || '', father_name: p?.father_name || '',
+      father_contact: p?.father_contact || '', father_occupation: p?.father_occupation || '',
+      mother_cnic: p?.mother_cnic || '', mother_name: p?.mother_name || '',
+      mother_contact: p?.mother_contact || '', mother_occupation: p?.mother_occupation || '',
+      religion: s.religion || '',
       fee_start_month: s.fee_start_month || '',
     });
     setShowForm(true);
@@ -343,6 +435,8 @@ export default function Students() {
     if (filterClass && s.class_id !== filterClass) return false;
     if (filterSection && s.section_id !== filterSection) return false;
     if (filterStatus && s.status !== filterStatus) return false;
+    // No religion ticked = show everyone; otherwise any of the ticked ones.
+    if (filterReligions.length && !filterReligions.includes(s.religion)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const p = parents.find(pr => pr.id === s.parent_id);
@@ -426,6 +520,7 @@ export default function Students() {
     filterClass && `Class: ${classes.find(c => c.id === filterClass)?.class_name}`,
     filterSection && `Section: ${sections.find(s => s.id === filterSection)?.section_name}`,
     filterStatus && `Status: ${filterStatus}`,
+    filterReligions.length && `Religion: ${filterReligions.join(', ')}`,
     searchQuery && `Search: "${searchQuery}"`,
   ].filter(Boolean).join(' · ');
 
@@ -450,6 +545,7 @@ export default function Students() {
       if (printCols.leaving_date)     row['Leaving Date']       = s.leaving_date || '';
       if (printCols.dob)              row['Date of Birth']      = s.dob || '';
       if (printCols.age)              row['Age']                = age;
+      if (printCols.religion)         row['Religion']           = s.religion || '';
       if (printCols.medical_info)     row['Medical Info']       = s.medical_info || '';
       if (printCols.father_name)      row['Father Name']        = p?.father_name || '';
       if (printCols.father_cnic)      row['Father CNIC']        = p?.father_cnic || '';
@@ -459,6 +555,7 @@ export default function Students() {
       if (printCols.mother_name)      row['Mother Name']        = p?.mother_name || '';
       if (printCols.mother_cnic)      row['Mother CNIC']        = p?.mother_cnic || '';
       if (printCols.mother_contact)   row['Mother Contact']     = p?.mother_contact || '';
+      if (printCols.mother_occupation)row['Mother Occupation']  = p?.mother_occupation || '';
       if (printCols.monthly_fee)      row['Monthly Fee (Rs.)']  = s.monthly_fee || 0;
       if (printCols.fee_start_month)  row['Fee Start Month']    = s.fee_start_month || '';
       return row;
@@ -571,6 +668,7 @@ export default function Students() {
               <option value="Active">Active</option>
               <option value="Left">Left</option>
             </select>
+            <ReligionFilter selected={filterReligions} onChange={setFilterReligions} />
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: 1, minWidth: 180, background: 'var(--bg-secondary)', padding: '4px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Age:</span>
@@ -893,6 +991,7 @@ export default function Students() {
               {filterClass && <span>Class: <strong>{classes.find(c => c.id === filterClass)?.class_name}</strong></span>}
               {filterSection && <span>Section: <strong>{sections.find(s => s.id === filterSection)?.section_name}</strong></span>}
               {filterStatus && <span>Status: <strong>{filterStatus}</strong></span>}
+              {filterReligions.length > 0 && <span>Religion: <strong>{filterReligions.join(', ')}</strong></span>}
               <span>Printed: <strong>{format(new Date(), 'dd MMM yyyy, hh:mm a')}</strong></span>
             </div>
           </div>
@@ -921,6 +1020,7 @@ export default function Students() {
                     {printCols.leaving_date && <div style={{ minWidth: 120 }}><strong>Leaving:</strong> {s.leaving_date || '-'}</div>}
                     {printCols.dob && <div style={{ minWidth: 120 }}><strong>DOB:</strong> {s.dob || '-'}</div>}
                     {printCols.age && <div style={{ minWidth: 120 }}><strong>Age:</strong> {age}</div>}
+                    {printCols.religion && <div style={{ minWidth: 120 }}><strong>Religion:</strong> {s.religion || '-'}</div>}
                     {printCols.medical_info && <div style={{ minWidth: 120 }}><strong>Medical:</strong> {s.medical_info || '-'}</div>}
                     {printCols.father_name && <div style={{ minWidth: 120 }}><strong>Father:</strong> {p?.father_name || '-'}</div>}
                     {printCols.father_cnic && <div style={{ minWidth: 120 }}><strong>F. CNIC:</strong> {p?.father_cnic || '-'}</div>}
@@ -930,6 +1030,7 @@ export default function Students() {
                     {printCols.mother_name && <div style={{ minWidth: 120 }}><strong>Mother:</strong> {p?.mother_name || '-'}</div>}
                     {printCols.mother_cnic && <div style={{ minWidth: 120 }}><strong>M. CNIC:</strong> {p?.mother_cnic || '-'}</div>}
                     {printCols.mother_contact && <div style={{ minWidth: 120 }}><strong>M. Contact:</strong> {p?.mother_contact || '-'}</div>}
+                    {printCols.mother_occupation && <div style={{ minWidth: 120 }}><strong>M. Occup:</strong> {p?.mother_occupation || '-'}</div>}
                     {printCols.monthly_fee && <div style={{ minWidth: 120 }}><strong>Fee:</strong> Rs. {Number(s.monthly_fee || 0).toLocaleString()}</div>}
                     {printCols.fee_start_month && <div style={{ minWidth: 120 }}><strong>Fee Start:</strong> {s.fee_start_month || '-'}</div>}
                   </div>

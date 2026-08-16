@@ -123,7 +123,9 @@ export default function FamilySearch({
             {selected.father_contact && `  ·  ${selected.father_contact}`}
           </div>
         </div>
-        <button onClick={() => onClear && onClear()} title="Clear" style={{ background: 'white', border: '1px solid #c7d2fe', borderRadius: 8, cursor: 'pointer', color: '#4f46e5', display: 'flex', padding: 6 }}>
+        {/* type="button" matters: this chip sits inside the admission <form>,
+            and a default submit button would save the student on a Clear click. */}
+        <button type="button" onClick={() => onClear && onClear()} title="Clear" style={{ background: 'white', border: '1px solid #c7d2fe', borderRadius: 8, cursor: 'pointer', color: '#4f46e5', display: 'flex', padding: 6 }}>
           <X size={15} />
         </button>
       </div>
@@ -143,6 +145,9 @@ export default function FamilySearch({
         value={q}
         onChange={e => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
+        // Same reason as the chip's Clear button: inside the admission <form>,
+        // Enter in a search box must not count as "save the student".
+        onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
       />
       {open && q.trim() && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: 'white', border: '1px solid var(--border-color)', borderRadius: 10, boxShadow: '0 12px 30px rgba(0,0,0,0.15)', zIndex: 50, maxHeight: 360, overflowY: 'auto' }}>

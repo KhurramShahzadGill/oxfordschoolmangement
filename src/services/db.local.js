@@ -10,6 +10,7 @@
  */
 
 import { DEFAULT_IMPORTANT_KEYS } from '../utils/completeness';
+import { findParentByCnic } from '../utils/cnic';
 
 const KEY = (name) => `demo_${name}`;
 const read = (name) => { try { return JSON.parse(localStorage.getItem(KEY(name)) || '[]'); } catch { return []; } };
@@ -69,20 +70,20 @@ export const seedDemo = () => {
     { id: uid(), class_id: classes[2].id, section_name: 'A' },
   ];
   const parents = [
-    { id: uid(), father_name: 'Ahmed Khan', father_cnic: '35201-1234567-1', father_occupation: 'Engineer',
-      father_contact: '0300-1112223', mother_name: 'Ayesha Khan', mother_cnic: '35201-7654321-2', mother_contact: '0301-9998887' },
-    { id: uid(), father_name: 'Bilal Sheikh', father_cnic: '35202-2223334-5', father_occupation: 'Doctor',
-      father_contact: '0321-4445556', mother_name: 'Fatima Sheikh', mother_cnic: '35202-9998887-6', mother_contact: '0333-1231234' },
+    { id: uid(), father_cnic: '35201-1234567-1', father_name: 'Ahmed Khan', father_contact: '0300-1112223', father_occupation: 'Engineer',
+      mother_cnic: '35201-7654321-2', mother_name: 'Ayesha Khan', mother_contact: '0301-9998887', mother_occupation: 'Teacher' },
+    { id: uid(), father_cnic: '35202-2223334-5', father_name: 'Bilal Sheikh', father_contact: '0321-4445556', father_occupation: 'Doctor',
+      mother_cnic: '35202-9998887-6', mother_name: 'Fatima Sheikh', mother_contact: '0333-1231234', mother_occupation: 'Housewife' },
   ];
   const thisMonth = new Date().toISOString().slice(0, 7);
   const students = [
-    { id: '1', roll_no: 'ADM-101', name: 'Hamza Khan', dob: '2016-04-12', gender: 'Male', status: 'Active',
+    { id: '1', roll_no: 'ADM-101', name: 'Hamza Khan', dob: '2016-04-12', gender: 'Male', religion: 'Muslim', status: 'Active',
       admission_date: '2024-04-01', address: 'Gatti, Faisalabad', monthly_fee: 2000, fee_start_month: thisMonth,
       parent_id: parents[0].id, class_id: classes[2].id, section_id: sections[1].id, picture: '', important_overrides: {} },
-    { id: '2', roll_no: 'ADM-102', name: 'Sara Khan', dob: '2019-09-05', gender: 'Female', status: 'Active',
+    { id: '2', roll_no: 'ADM-102', name: 'Sara Khan', dob: '2019-09-05', gender: 'Female', religion: 'Muslim', status: 'Active',
       admission_date: '2024-04-01', address: 'Gatti, Faisalabad', monthly_fee: 1500, fee_start_month: thisMonth,
       parent_id: parents[0].id, class_id: classes[1].id, section_id: sections[0].id, picture: '', important_overrides: {} },
-    { id: '3', roll_no: 'ADM-103', name: 'Zain Sheikh', dob: '2017-01-22', gender: 'Male', status: 'Active',
+    { id: '3', roll_no: 'ADM-103', name: 'Zain Sheikh', dob: '2017-01-22', gender: 'Male', religion: 'Christian', status: 'Active',
       admission_date: '2024-04-01', address: 'Gatti, Faisalabad', monthly_fee: 2500, fee_start_month: thisMonth,
       parent_id: parents[1].id, class_id: classes[2].id, section_id: sections[1].id, picture: '', important_overrides: {} },
   ];
@@ -181,7 +182,8 @@ export const apiParents = {
   createOrGet: async (data) => {
     const rows = read('parents');
     let existing = null;
-    if (data.father_cnic) existing = rows.find(p => p.father_cnic === data.father_cnic);
+    // Same rule as the cloud layer: either CNIC identifies the family.
+    if (data.father_cnic || data.mother_cnic) existing = findParentByCnic(rows, data.father_cnic, data.mother_cnic);
     else if (data.father_name && data.father_contact) {
       existing = rows.find(p => p.father_name === data.father_name && p.father_contact === data.father_contact);
     }
