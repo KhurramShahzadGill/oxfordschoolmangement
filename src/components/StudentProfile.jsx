@@ -7,6 +7,16 @@ import StudentCard from './StudentCard';
 
 // Read-only record of one student. Moving a student to another class is not
 // done here — that is the Promotion module's job, in bulk or one by one.
+// Reusable labeled field cell for the on-screen profile. Declared out here, not
+// inside the component: a component re-created on every render is a new type
+// each time, so React throws its subtree away and rebuilds it instead of updating.
+const Field = ({ label, value, span }) => (
+  <div style={{ background: '#fff', border: '1px solid var(--border-color)', borderRadius: 10, padding: '8px 12px', gridColumn: span ? '1 / -1' : 'auto' }}>
+    <div style={{ fontSize: '0.64rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', fontWeight: 700, marginBottom: 2 }}>{label}</div>
+    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>{value || '-'}</div>
+  </div>
+);
+
 export default function StudentProfile({ studentId, onClose }) {
   const [student, setStudent] = useState(null);
   const [parent, setParent] = useState(null);
@@ -98,13 +108,6 @@ export default function StudentProfile({ studentId, onClose }) {
   const getClassName = (id) => classes.find(c => c.id === id)?.class_name || '-';
   const getSectionName = (id) => sections.find(s => s.id === id)?.section_name || '-';
 
-  // Reusable labeled field cell for the on-screen profile
-  const Field = ({ label, value, span }) => (
-    <div style={{ background: '#fff', border: '1px solid var(--border-color)', borderRadius: 10, padding: '8px 12px', gridColumn: span ? '1 / -1' : 'auto' }}>
-      <div style={{ fontSize: '0.64rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', fontWeight: 700, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>{value || '-'}</div>
-    </div>
-  );
   const sectionTitle = { color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' };
   const fieldGrid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 22 };
 
@@ -150,6 +153,7 @@ export default function StudentProfile({ studentId, onClose }) {
             <Field label="Date of Birth" value={formatDate(student.dob)} />
             <Field label="Age" value={age !== '-' ? `${age} years` : '-'} />
             <Field label="Gender" value={student.gender} />
+            <Field label="Religion" value={student.religion} />
             <Field label="Admission Date" value={formatDate(student.admission_date)} />
             <Field label="Monthly Fee" value={`Rs. ${Number(student.monthly_fee || 0).toLocaleString()}`} />
             <Field label="Fee Starts From" value={student.fee_start_month ? fmtMon(student.fee_start_month) : '-'} />
@@ -163,12 +167,14 @@ export default function StudentProfile({ studentId, onClose }) {
             <>
               <h3 className="text-sm font-semibold mb-2" style={sectionTitle}>Parent / Guardian Information</h3>
               <div style={fieldGrid}>
-                <Field label="Father's Name" value={parent.father_name} />
                 <Field label="Father's CNIC" value={parent.father_cnic} />
-                <Field label="Father's Occupation" value={parent.father_occupation} />
+                <Field label="Father's Name" value={parent.father_name} />
                 <Field label="Father's Contact" value={parent.father_contact} />
+                <Field label="Father's Occupation" value={parent.father_occupation} />
+                <Field label="Mother's CNIC" value={parent.mother_cnic} />
                 <Field label="Mother's Name" value={parent.mother_name} />
                 <Field label="Mother's Contact" value={parent.mother_contact} />
+                <Field label="Mother's Occupation" value={parent.mother_occupation} />
               </div>
             </>
           )}
@@ -303,7 +309,11 @@ export default function StudentProfile({ studentId, onClose }) {
                   </tr>
                   <tr>
                     <td style={pTdB}>Gender:</td><td style={pTdV}>{student.gender || '-'}</td>
+                    <td style={pTdB}>Religion:</td><td style={pTdV}>{student.religion || '-'}</td>
+                  </tr>
+                  <tr>
                     <td style={pTdB}>Admission Date:</td><td style={pTdV}>{formatDate(student.admission_date)}</td>
+                    <td style={pTdB}></td><td style={pTdV}></td>
                   </tr>
                   <tr>
                     <td style={pTdB}>Monthly Fee:</td><td style={pTdV}>Rs. {Number(student.monthly_fee || 0).toLocaleString()}</td>

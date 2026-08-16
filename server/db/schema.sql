@@ -98,6 +98,7 @@ CREATE TABLE parents (
   mother_name       text,
   mother_cnic       text,
   mother_contact    text,
+  mother_occupation text,
   address           text,
   created_at        timestamptz NOT NULL DEFAULT now()
 );
@@ -122,6 +123,7 @@ CREATE TABLE students (
   name             text NOT NULL,
   dob              date,
   gender           text CHECK (gender IN ('Male','Female','Other')),
+  religion         text,
   picture_url      text,
   admission_date   date,
   leaving_date     date,

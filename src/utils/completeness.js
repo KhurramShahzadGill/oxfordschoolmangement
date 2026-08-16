@@ -23,6 +23,7 @@ export const ADMISSION_FIELD_GROUPS = [
       { key: 'name',            label: 'Student Name' },
       { key: 'dob',             label: 'Date of Birth' },
       { key: 'gender',          label: 'Gender' },
+      { key: 'religion',        label: 'Religion' },
       { key: 'admission_date',  label: 'Admission Date' },
       { key: 'class_id',        label: 'Class' },
       { key: 'section_id',      label: 'Section' },
@@ -44,25 +45,36 @@ export const ADMISSION_FIELD_GROUPS = [
     ],
   },
   {
+    // Listed CNIC-first, the order they are filled in on the admission form.
     label: 'Parent / Guardian',
     fields: [
-      { key: 'father_name',       label: 'Father Name' },
       { key: 'father_cnic',       label: 'Father CNIC' },
-      { key: 'father_occupation', label: 'Father Occupation' },
+      { key: 'father_name',       label: 'Father Name' },
       { key: 'father_contact',    label: 'Father Contact' },
-      { key: 'mother_name',       label: 'Mother Name' },
+      { key: 'father_occupation', label: 'Father Occupation' },
       { key: 'mother_cnic',       label: 'Mother CNIC' },
+      { key: 'mother_name',       label: 'Mother Name' },
       { key: 'mother_contact',    label: 'Mother Contact' },
+      { key: 'mother_occupation', label: 'Mother Occupation' },
     ],
   },
 ];
+
+/*
+ * Religion choices for the admission form and the Students filter.
+ *
+ * A fixed list rather than free text: the filter can only group students
+ * reliably when everyone spells the same religion the same way. Edit this one
+ * array to change the options everywhere.
+ */
+export const RELIGIONS = ['Muslim', 'Christian', 'Hindu', 'Sikh', 'Parsi', 'Buddhist', 'Other'];
 
 export const ADMISSION_FIELD_CATALOG = ADMISSION_FIELD_GROUPS.flatMap(g => g.fields);
 
 // Fields marked important out of the box (the sensible defaults we shipped).
 export const DEFAULT_IMPORTANT_KEYS = [
-  'roll_no', 'name', 'dob', 'gender', 'class_id', 'section_id', 'address', 'monthly_fee', 'picture',
-  'father_name', 'father_cnic', 'father_contact', 'mother_name', 'mother_cnic',
+  'roll_no', 'name', 'dob', 'gender', 'religion', 'class_id', 'section_id', 'address', 'monthly_fee', 'picture',
+  'father_cnic', 'father_name', 'father_contact', 'mother_cnic', 'mother_name',
 ];
 
 export const labelForKey = (key) => ADMISSION_FIELD_CATALOG.find(f => f.key === key)?.label || key;
