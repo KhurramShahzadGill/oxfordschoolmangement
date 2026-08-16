@@ -1,8 +1,104 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getSettings, saveSettings, defaultSettings } from '../services/db';
 import { compressImage } from '../utils/image';
 import { ADMISSION_FIELD_GROUPS, DEFAULT_IMPORTANT_KEYS } from '../utils/completeness';
-import { Save, RotateCcw, Building2, Star } from 'lucide-react';
+import { supabase } from '../services/supabase';
+import { IS_DEMO } from '../services/demo';
+import { Save, RotateCcw, Building2, Star, KeyRound } from 'lucide-react';
+
+const MIN_PASSWORD = 8;
+
+/*
+ * Change Password.
+ *
+ * The current password is asked for and actually verified (by signing in with
+ * it) before the new one is accepted. A logged-in session alone is not enough:
+ * without this, anyone who walked up to an unattended computer could lock the
+ * school out of their own account.
+ *
+ * The password itself is never stored or shown anywhere — Supabase keeps only a
+ * one-way hash of it, so there is nothing to read back even from the database.
+ */
+function ChangePassword() {
+  const [email, setEmail] = useState('');
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ''));
+  }, []);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(''); setDone(false);
+
+    if (next.length < MIN_PASSWORD) { setError(`The new password must be at least ${MIN_PASSWORD} characters.`); return; }
+    if (next !== confirm)           { setError('The new password and its confirmation do not match.'); return; }
+    if (next === current)           { setError('The new password is the same as the current one.'); return; }
+    if (!email)                     { setError('Could not read the signed-in account. Please sign in again.'); return; }
+
+    setBusy(true);
+    // Verify the current password first — this is the re-authentication step.
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password: current });
+    if (authError) { setBusy(false); setError('The current password is not correct.'); return; }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: next });
+    setBusy(false);
+    if (updateError) { setError(`Could not change the password: ${updateError.message}`); return; }
+
+    setCurrent(''); setNext(''); setConfirm(''); setDone(true);
+  };
+
+  const box = { padding: '8px 12px', borderRadius: 8, fontSize: '0.82rem', marginBottom: 12 };
+
+  return (
+    <div className="card mb-6">
+      <h2 className="text-lg font-semibold mb-1" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <KeyRound size={18} style={{ color: 'var(--primary)' }} /> Change Password
+      </h2>
+      <p className="text-xs text-secondary-color mb-4">
+        Signed in as <strong>{email || '…'}</strong>.
+      </p>
+
+      <form onSubmit={submit}>
+        {/* Kept out of the browser's saved-logins flow, and off the page for
+            password managers that would otherwise offer to fill the old one. */}
+        <input type="text" name="username" autoComplete="username" value={email} readOnly hidden />
+        <div className="grid grid-cols-3 gap-4">
+          <div className="form-group">
+            <label className="form-label">Current Password</label>
+            <input type="password" className="form-input" autoComplete="current-password"
+              value={current} onChange={e => { setCurrent(e.target.value); setDone(false); }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">New Password <span className="text-xs text-secondary-color">(min {MIN_PASSWORD} characters)</span></label>
+            <input type="password" className="form-input" autoComplete="new-password"
+              value={next} onChange={e => { setNext(e.target.value); setDone(false); }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Confirm New Password</label>
+            <input type="password" className="form-input" autoComplete="new-password"
+              value={confirm} onChange={e => { setConfirm(e.target.value); setDone(false); }} />
+          </div>
+        </div>
+
+        {error && <div style={{ ...box, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>{error}</div>}
+        {done && <div style={{ ...box, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>✓ Password changed. Use the new one from your next sign-in.</div>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="submit" className="btn btn-primary" style={{ padding: '10px 24px' }}
+            disabled={busy || !current || !next || !confirm}>
+            <KeyRound size={16} /> {busy ? 'Changing…' : 'Change Password'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 
 export default function Settings() {
   const [form, setForm] = useState(getSettings());
@@ -112,6 +208,9 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {/* Account security. The demo has no accounts at all, so nothing to change. */}
+      {!IS_DEMO && <div style={{ marginTop: 24 }}><ChangePassword /></div>}
 
       {/* Important admission fields (applies to every student) */}
       <div className="card" style={{ marginTop: 24 }}>
