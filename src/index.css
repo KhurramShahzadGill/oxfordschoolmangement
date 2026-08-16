@@ -641,6 +641,34 @@ body {
     display: block !important;
   }
 
+  /* ── Un-clip the app shell for EVERY print ──
+     On screen the shell is a fixed-height frame with its own scrolling area
+     (.app-container is 100vh/hidden, .page-content scrolls inside it). Paper
+     has no scrollbar, so that frame used to hand the printer exactly one
+     screenful and throw the rest away — a long report came out as a single
+     cut-off page instead of flowing across A4 pages.
+     On paper the shell is just a plain block that grows with its content, and
+     the browser paginates it normally. */
+  #root,
+  .app-container,
+  .main-content,
+  .page-content {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+  .page-content { padding: 0 !important; }
+
+  /* Same reason sideways: a report's table must break across pages, not sit in
+     a horizontal scroller that clips whatever does not fit the paper width. */
+  .print-only .table-container,
+  .print-only .card {
+    overflow: visible !important;
+  }
+
   .voucher-print {
     width: 100%;
     height: 287mm; /* Full A4 height minus margins */
