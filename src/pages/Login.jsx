@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getSettings } from '../services/db';
+import { getSettings, loadSchoolContext, getSchool } from '../services/db';
 import { supabase } from '../services/supabase';
 
 export default function Login() {
@@ -23,6 +23,17 @@ export default function Login() {
       setError(`Login failed: ${error.message}`);
       return;
     }
+    // Suspended schools are signed straight back out, so a valid password alone
+    // is not enough to get in while the account is switched off.
+    try {
+      await loadSchoolContext();
+      if (getSchool()?.is_active === false) {
+        await supabase.auth.signOut();
+        setError('Account Suspended');
+        return;
+      }
+    } catch { /* leave the normal flow alone if the lookup fails */ }
+
     navigate('/');
   };
 

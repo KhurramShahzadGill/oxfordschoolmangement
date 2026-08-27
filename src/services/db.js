@@ -23,6 +23,7 @@ if (IS_DEMO) local.seedDemo();
 
 export const loadSchoolContext  = impl.loadSchoolContext;
 export const getSchoolId        = impl.getSchoolId;
+export const getSchool          = impl.getSchool;
 export const clearSchoolContext = impl.clearSchoolContext;
 
 export const ADMISSION_HEADS    = impl.ADMISSION_HEADS;

@@ -10,7 +10,7 @@ import Fees from './pages/Fees';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { supabase } from './services/supabase';
-import { loadSchoolContext } from './services/db';
+import { loadSchoolContext, getSchool } from './services/db';
 import { IS_DEMO } from './services/demo';
 
 // Auth guard — allows access only when a Supabase session exists, and loads
@@ -35,6 +35,13 @@ const RequireAuth = ({ children }) => {
         return;
       }
       try { await loadSchoolContext(); } catch { /* fall back to defaults */ }
+      // A school that has been switched off loses access on the next check,
+      // even if the browser is still holding a perfectly valid session.
+      if (getSchool()?.is_active === false) {
+        await supabase.auth.signOut();
+        if (active) setStatus('out');
+        return;
+      }
       if (active) setStatus('in');
     };
     supabase.auth.getSession().then(({ data }) => resolve(data.session));

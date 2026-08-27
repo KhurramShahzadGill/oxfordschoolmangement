@@ -27,6 +27,7 @@ export const loadSchoolContext = async () => {
   return data;
 };
 export const getSchoolId = () => currentSchool?.id || null;
+export const getSchool = () => currentSchool;
 export const clearSchoolContext = () => { currentSchool = null; };
 const withSchool = (obj) => {
   const school_id = getSchoolId();

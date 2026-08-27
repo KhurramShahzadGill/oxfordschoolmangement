@@ -103,6 +103,7 @@ export const seedDemo = () => {
 // ===== School context (a single, local demo school) =====
 export const loadSchoolContext = async () => getSettings();
 export const getSchoolId = () => 'demo-school';
+export const getSchool = () => ({ id: 'demo-school', is_active: true });
 export const clearSchoolContext = () => {};
 
 export const peekNextStudentId = () => null;
