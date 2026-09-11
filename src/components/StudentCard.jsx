@@ -2,6 +2,39 @@ import React from 'react';
 import { Phone, MapPin, User, CalendarDays, GraduationCap } from 'lucide-react';
 import { getSettings } from '../services/db';
 
+/* ── Fitting the student's name ──────────────────────────────────────────────
+   The card is a fixed 400x260 box, so a long name used to run past the photo
+   and get cut off with an ellipsis ("SYED MUHAMMAD MOHSIN R..."). Instead of
+   clipping, the name is now measured and the font size is shrunk until it fits
+   the space beside the photo; a name too long even at the smallest size wraps
+   onto a second line. Measuring happens on an offscreen canvas rather than in
+   the DOM, because the bulk-print cards are display:none until the browser
+   prints them and so have no measurable layout. */
+const NAME_BOX = 270;   // px available for the name, left of the photo
+const NAME_MAX = 16.5;  // normal size
+const NAME_MIN = 12.5;  // smallest size still worth reading on one line
+const NAME_FONT = '900 100px "Outfit", "Inter", Arial, sans-serif';
+
+let measureCtx;
+function nameWidthPerPx(text) {
+  try {
+    if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+    measureCtx.font = NAME_FONT;
+    return measureCtx.measureText(text).width / 100;
+  } catch {
+    return text.length * 0.62; // rough average for uppercase bold text
+  }
+}
+
+function fitName(name) {
+  const perPx = nameWidthPerPx(name);
+  if (!perPx) return { fontSize: NAME_MAX, lines: 1 };
+  const oneLine = NAME_BOX / perPx;
+  if (oneLine >= NAME_MIN) return { fontSize: Math.min(NAME_MAX, oneLine), lines: 1 };
+  // Two lines: allow ~1.8 boxes of text, since words rarely break evenly.
+  return { fontSize: Math.max(10, Math.min(NAME_MAX, (NAME_BOX * 1.8) / perPx)), lines: 2 };
+}
+
 export default function StudentCard({ student, parent, className, sectionName }) {
   if (!student) return null;
   const school = getSettings();
@@ -14,6 +47,9 @@ export default function StudentCard({ student, parent, className, sectionName })
   };
 
   const GRAD = 'linear-gradient(120deg, #4318FF 0%, #7c3aed 45%, #ec4899 100%)';
+
+  const studentName = (student.name || '').toUpperCase();
+  const nameFit = fitName(studentName);
 
   const Field = ({ icon: Icon, iconColor, iconBg, label, value, wide }) => (
     <div style={{ width: wide ? '100%' : '48.5%', display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
@@ -69,7 +105,13 @@ export default function StudentCard({ student, parent, className, sectionName })
 
         {/* Details */}
         <div style={{ flex: 1, minWidth: 0, zIndex: 1 }}>
-          <div style={{ fontSize: 16.5, fontWeight: 900, color: '#1e1b4b', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15 }}>
+          <div style={{
+            fontSize: nameFit.fontSize, fontWeight: 900, color: '#1e1b4b', textTransform: 'uppercase',
+            lineHeight: 1.15, overflow: 'hidden',
+            ...(nameFit.lines === 1
+              ? { whiteSpace: 'nowrap' }
+              : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflowWrap: 'anywhere' }),
+          }}>
             {student.name}
           </div>
           <div style={{ width: 46, height: 3, background: GRAD, borderRadius: 99, margin: '3px 0 7px' }} />
