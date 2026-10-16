@@ -3,6 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { getSettings, loadSchoolContext, getSchool } from '../services/db';
 import { supabase } from '../services/supabase';
 
+// When the request never reaches the auth server — no internet, or a database
+// that has been paused for inactivity — Supabase hands back the browser's own
+// "Failed to fetch". Staff read that as a rejected password and keep retrying,
+// so these two cases get a plain message of their own instead.
+const NO_INTERNET_MESSAGE = 'No internet connection. Please check your connection and try again.';
+const NO_SERVER_MESSAGE = 'Cannot reach the server right now. This is not a password problem — please try again in a few minutes, or contact support.';
+
+function isConnectionFailure(error) {
+  if (error?.name === 'AuthRetryableFetchError') return true;
+  if (error?.status === 0) return true;
+  return /failed to fetch|network\s?error|network request failed|load failed/i.test(error?.message || '');
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const settings = getSettings();
@@ -15,12 +28,25 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+
+    // A thrown error means the same thing here as a returned one: the sign-in
+    // did not happen. Either way it has to reach the message check below.
+    let signInError;
+    try {
+      ({ error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password }));
+    } catch (thrown) {
+      signInError = thrown;
+    }
     setLoading(false);
-    if (error) {
+
+    if (signInError) {
+      if (isConnectionFailure(signInError)) {
+        setError(navigator.onLine ? NO_SERVER_MESSAGE : NO_INTERNET_MESSAGE);
+        return;
+      }
       // Show Supabase's actual message during setup/testing so mismatches
       // (unconfirmed email, wrong password, etc.) are easy to diagnose.
-      setError(`Login failed: ${error.message}`);
+      setError(`Login failed: ${signInError.message}`);
       return;
     }
     // Suspended schools are signed straight back out, so a valid password alone
