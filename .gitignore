@@ -28,7 +28,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Database backups — real student and parent data. Never commit: this repo is
+# Database backups hold real student and parent data. Never commit: this repo is
 # pushed to GitHub and deployed publicly, so a dump here would leak the school's
 # records to anyone who can read the repo or the built site.
 backups/*

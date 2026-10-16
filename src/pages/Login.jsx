@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { getSettings, loadSchoolContext, getSchool } from '../services/db';
 import { supabase } from '../services/supabase';
 
-// When the request never reaches the auth server — no internet, or a database
-// that has been paused for inactivity — Supabase hands back the browser's own
-// "Failed to fetch". Staff read that as a rejected password and keep retrying,
-// so these two cases get a plain message of their own instead.
+// When the request never reaches the auth server, because there is no internet
+// or the database has been paused for inactivity, Supabase hands back the
+// browser's own "Failed to fetch". Staff read that as a rejected password and
+// keep retrying, so these two cases get a plain message of their own instead.
 const NO_INTERNET_MESSAGE = 'No internet connection. Please check your connection and try again.';
-const NO_SERVER_MESSAGE = 'Cannot reach the server right now. This is not a password problem — please try again in a few minutes, or contact support.';
+const NO_SERVER_MESSAGE = 'Cannot reach the server right now. This is not a password problem. Please try again in a few minutes, or contact support.';
 
 function isConnectionFailure(error) {
   if (error?.name === 'AuthRetryableFetchError') return true;
