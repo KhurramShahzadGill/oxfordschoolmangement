@@ -8,7 +8,7 @@ import { findParentByCnic, describeParent, isCompleteCnic, PARENT_FIELDS } from 
 import { findLikelyFamilies } from '../utils/family';
 import { differenceInYears, parseISO } from 'date-fns';
 
-export default function StudentForm({ initial, parents = [], students = [], onSubmit, onCancel, isEdit, nextId }) {
+export default function StudentForm({ initial, parents = [], students = [], onSubmit, onCancel, isEdit, nextId, saving = false }) {
   const [classes, setClasses] = useState([]);
   const [sections, setSections] = useState([]);
   const [photoInputKey, setPhotoInputKey] = useState(0);
@@ -210,6 +210,9 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Already saving. Enter in a text field submits the form too, so the
+    // disabled button alone is not enough to stop a second attempt.
+    if (saving) return;
 
     /*
      * A CNIC is unique to one citizen, so requiring one gives every family a
@@ -542,8 +545,13 @@ export default function StudentForm({ initial, parents = [], students = [], onSu
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="btn btn-primary">{isEdit ? 'Update' : 'Save'} Student</button>
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
+          {/* Saving can take a few seconds (photo upload, fee charges). Saying
+              so on the button is what stops the second and third press. */}
+          <button type="submit" className="btn btn-primary" disabled={saving}
+                  style={saving ? { opacity: 0.6, cursor: 'wait' } : undefined}>
+            {saving ? 'Saving, please wait...' : `${isEdit ? 'Update' : 'Save'} Student`}
+          </button>
         </div>
       </form>
     </div>

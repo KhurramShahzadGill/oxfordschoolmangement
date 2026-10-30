@@ -235,6 +235,11 @@ export default function Students() {
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState(null);
   const [profileId, setProfileId] = useState(null);
+  // A save is a long chain of calls (parent, student, photo, charges). Until it
+  // finishes the form is still on screen, so the Save button has to say so and
+  // refuse a second press, or every impatient click adds another student.
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -276,10 +281,37 @@ export default function Students() {
   useEffect(() => { loadData(); }, []);
 
   const handleFormSubmit = async (form) => {
+    // The ref, not the state, is what refuses a second submit. A state update
+    // does not land in time to stop a fast double click or an Enter keypress,
+    // and every submit that gets through inserts another student.
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await saveStudent(form);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const saveStudent = async (form) => {
+    // The checks below have to see what is in the database right now. The list
+    // this page loaded earlier goes stale the moment a save half succeeds, and
+    // a stale list is what let the same student be added nine times.
+    let liveStudents = students;
+    let liveParents = parents;
+    try {
+      [liveStudents, liveParents] = await Promise.all([apiStudents.getAll(), apiParents.getAll()]);
+    } catch {
+      // Server unreachable. The save itself will fail and say so, so fall back
+      // to the loaded lists rather than blocking the admission here.
+    }
+
     // Admission No stays manual, but must be unique across students.
     const adm = (form.roll_no || '').trim();
     if (adm) {
-      const dup = students.find(s => (s.roll_no || '').trim().toLowerCase() === adm.toLowerCase() && s.id !== editData?.id);
+      const dup = liveStudents.find(s => (s.roll_no || '').trim().toLowerCase() === adm.toLowerCase() && s.id !== editData?.id);
       if (dup) {
         alert(`Admission No "${adm}" is already used by ${dup.name} (Student ID ${dup.id}).\n\nPlease enter a unique Admission No.`);
         return;
@@ -297,12 +329,29 @@ export default function Students() {
     // final say on which family this student joins. Resolving it here as well
     // as in the form means no code path can end up with the same CNIC on two
     // parent records, which is what would silently split a family in two.
-    const cnicOwner = findParentByCnic(parents, form.father_cnic, form.mother_cnic);
+    const cnicOwner = findParentByCnic(liveParents, form.father_cnic, form.mother_cnic);
     if (cnicOwner && form.parent_id && cnicOwner.id !== form.parent_id) {
       alert(`This CNIC is already registered to another family:\n\n${describeParent(cnicOwner)}\n\nRe-type the CNIC in the form to link this student to that family, or correct it before saving.`);
       return;
     }
     const linkedParentId = form.parent_id || cnicOwner?.id || '';
+
+    // Admission No is optional, so its uniqueness check cannot catch a repeated
+    // save. The same child, same family, same class is the pattern that repeat
+    // actually leaves behind, so ask about it before adding another row.
+    if (!editData && linkedParentId) {
+      const tidy = (n) => (n || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const twin = liveStudents.find(s =>
+        s.parent_id === linkedParentId &&
+        tidy(s.name) === tidy(form.name) &&
+        s.class_id === form.class_id &&
+        s.section_id === form.section_id
+      );
+      if (twin && !window.confirm(
+        `${twin.name} is already enrolled in this class under the same family (Student ID ${twin.id}).\n\n` +
+        `If your last save looked like it failed, it may have gone through. Check the list before adding another.\n\n` +
+        `OK = add anyway (real twins) | Cancel = do not add`)) return;
+    }
     // Editing may move a student to a different family; remember where they came
     // from so an emptied-out parent record can be cleaned up afterwards.
     const previousParentId = editData?.parent_id || '';
@@ -373,9 +422,9 @@ export default function Students() {
       // Moved to another family and nobody is left behind — offer to clear the
       // empty record so it stops showing up in searches and parent lists.
       if (previousParentId && previousParentId !== parent.id) {
-        const stillThere = students.filter(s => s.parent_id === previousParentId && s.id !== editData.id);
+        const stillThere = liveStudents.filter(s => s.parent_id === previousParentId && s.id !== editData.id);
         if (stillThere.length === 0) {
-          const old = parents.find(p => p.id === previousParentId);
+          const old = liveParents.find(p => p.id === previousParentId);
           if (window.confirm(`${describeParent(old)} now has no enrolled children.\n\nDelete that empty parent record?\n\nOK = delete it | Cancel = keep it`)) {
             try { await apiParents.delete(previousParentId); } catch { /* best effort */ }
           }
@@ -632,8 +681,9 @@ export default function Students() {
             students={students}
             isEdit={!!editData}
             nextId={peekNextStudentId()}
+            saving={saving}
             onSubmit={handleFormSubmit}
-            onCancel={() => { setShowForm(false); setEditData(null); }}
+            onCancel={() => { if (!saving) { setShowForm(false); setEditData(null); } }}
           />
         )}
 
